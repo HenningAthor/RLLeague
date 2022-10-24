@@ -1,9 +1,10 @@
 import pickle
 import os
+import time
 
 from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
-
+from rlbot.utils.game_state_util import GameState, GameInfoState
 from src.util.boost_pad_tracker import BoostPadTracker
 from src.util.sequence import Sequence
 from src.util.vec import Vec3
@@ -32,6 +33,9 @@ class MyBot(BaseAgent):
         # Set up information about the boost pads now that the game is active
         # and the info is available
         self.boost_pad_tracker.initialize_boosts(self.get_field_info())
+        game_info_state = GameInfoState(game_speed=4.0)
+        game_state = GameState(game_info=game_info_state)
+        self.set_game_state(game_state)
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         """
@@ -106,8 +110,13 @@ class MyBot(BaseAgent):
                          'overtime': int(packet.game_info.is_overtime) == 1}
                }
 
+        t = time.time()
         steer = self.bot.eval_steering(env)
+        t_steer = time.time() - t
+
+        t = time.time()
         throttle = self.bot.eval_throttle(env)
+        t_throttle = time.time() - t
 
         self.max_steering = max(self.max_steering, steer)
         self.min_steering = min(self.min_steering, steer)
@@ -124,7 +133,7 @@ class MyBot(BaseAgent):
             norm_throttle = (throttle - self.min_throttle) / (self.max_throttle - self.min_throttle)
             norm_throttle = norm_throttle * (1 - -1) + -1
 
-        print(self.bot.name, norm_steer, norm_throttle)
+        print(self.bot.name, norm_steer, norm_throttle, t_steer, t_throttle)
 
         controls = SimpleControllerState()
         controls.steer = norm_steer
