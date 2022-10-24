@@ -30,10 +30,16 @@ if __name__ == '__main__':
                                     'ball_rotation_roll'],
                      'LOGIC': ['kickoff']}
 
-    # bot = create_bot(0, 10, 15, env_variables)
-    # print(bot.info())
-    # bot.prepare_for_rlbot()
-    # bot = create_bot(1, 10, 15, env_variables)
-    # print(bot.info())
-    # bot.prepare_for_rlbot()
+    bot = create_bot(0, 5, 10, env_variables)
+    print(bot.info())
+    bot.prepare_for_rlbot()
+    bot = create_bot(1, 5, 10, env_variables)
+    print(bot.info())
+    bot.prepare_for_rlbot()
+    bot = create_bot(2, 5, 10, env_variables)
+    print(bot.info())
+    bot.prepare_for_rlbot()
+    bot = create_bot(3, 5, 10, env_variables)
+    print(bot.info())
+    bot.prepare_for_rlbot()
     runner.main()
