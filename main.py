@@ -3,7 +3,9 @@ import rlbot.runner as runner
 from genetic_lab.bot_generation import create_bot
 
 if __name__ == '__main__':
-    env_variables = {'ARITHMETIC': ['my_car_x', 'my_car_y', 'my_car_z',
+    env_variables = {'ARITHMETIC': ['my_car_x',
+                                    'my_car_y',
+                                    'my_car_z',
                                     'my_car_velocity_x',
                                     'my_car_velocity_y',
                                     'my_car_velocity_z',
