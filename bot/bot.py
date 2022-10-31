@@ -18,6 +18,9 @@ class Bot(object):
         self.steering_root: Node = None
         self.throttle_root: Node = None
 
+    def __str__(self):
+        return f"{self.name}"
+
     def eval_steering(self, env):
         """
         Evaluates the steering tree.

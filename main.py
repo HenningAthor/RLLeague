@@ -42,4 +42,4 @@ if __name__ == '__main__':
     bot = create_bot(3, 5, 10, env_variables)
     print(bot.info())
     bot.prepare_for_rlbot()
-    runner.main()
+    # runner.main()
