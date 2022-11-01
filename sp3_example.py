@@ -1,4 +1,6 @@
 # Here we import the Match object and our multi-instance wrapper
+import datetime
+
 from rlgym.envs import Match
 from rlgym.utils import StateSetter
 from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
@@ -55,8 +57,8 @@ class RLLeagueAction(ContinuousAction):
         self.rew_1 += reward_movement(0, state)
         self.rew_2 += reward_movement(1, state)
 
-        print(f"Agent 1: {self.rew_1}")
-        print(f"Agent 2: {self.rew_2}")
+        # print(f"Agent 1: {self.rew_1}")
+        # print(f"Agent 2: {self.rew_2}")
 
         env_1 = {'ARITHMETIC': {'my_car_x': state.players[0].inverted_car_data.position[0],
                                 'my_car_y': state.players[0].inverted_car_data.position[1],
@@ -143,8 +145,9 @@ class RLLeagueState(StateSetter):
     SPAWN_ORANGE_POS = [[2048, 2560, 17], [-2048, 2560, 17], [256, 3840, 17], [-256, 3840, 17], [0, 4608, 17]]
     SPAWN_ORANGE_YAW = [-0.75 * np.pi, -0.25 * np.pi, -0.5 * np.pi, -0.5 * np.pi, -0.5 * np.pi]
 
-    def __init__(self):
+    def __init__(self, rl_league_action: RLLeagueAction):
         super().__init__()
+        self.rl_league_action = rl_league_action
 
     def reset(self, state_wrapper: StateWrapper):
         """
@@ -152,6 +155,13 @@ class RLLeagueState(StateSetter):
 
         :param state_wrapper: StateWrapper object to be modified with desired state values.
         """
+        date_str = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        file_name = f"game_reports/game_{self.rl_league_action.agent_1.name}_{self.rl_league_action.agent_2.name}_{date_str}.txt"
+        f = open(file_name, "w")
+        f.write(f"{self.rl_league_action.rew_1}\n{self.rl_league_action.rew_2}")
+        f.close()
+        self.rl_league_action.rew_1 = 0.0
+        self.rl_league_action.rew_2 = 0.0
         # possible kickoff indices are shuffled
         spawn_inds = [0, 1, 2, 3, 4]
         random.shuffle(spawn_inds)
@@ -187,25 +197,29 @@ if __name__ == "__main__":
     but the easiest solution is to delay for some period of time between launching clients. The amount of required delay will depend on your hardware, so make sure to change this number if your Rocket League
     clients are crashing before they fully launch.
     """
+    rl_league_action1 = RLLeagueAction(0, 1)
+    rl_league_action2 = RLLeagueAction(2, 3)
     match1 = Match(
         reward_function=DefaultReward(),
-        terminal_conditions=[TimeoutCondition(1000)],
+        terminal_conditions=[],
         obs_builder=DefaultObs(),
-        state_setter=RLLeagueState(),
-        action_parser=RLLeagueAction(0, 1),
-        game_speed=1,
+        action_parser=rl_league_action1,
+        state_setter=RLLeagueState(rl_league_action1),
+        game_speed=100,
         spawn_opponents=True)
     match2 = Match(
         reward_function=DefaultReward(),
-        terminal_conditions=[TimeoutCondition(1000)],
+        terminal_conditions=[],
         obs_builder=DefaultObs(),
-        state_setter=RLLeagueState(),
-        action_parser=RLLeagueAction(2, 3),
-        game_speed=1,
+        action_parser=rl_league_action2,
+        state_setter=RLLeagueState(rl_league_action2),
+        game_speed=100,
         spawn_opponents=True)
 
     matches = [match1, match2]
     env = SB3MultipleInstanceEnv(match_func_or_matches=matches, num_instances=len(matches), wait_time=20)
     learner = PPO(policy="MlpPolicy", env=env, verbose=1)
-    learner.learn(100_000_000)
+    learner.learn(50_000)
     print("fin")
+    learner.learn(50_000)
+    env.reset()
