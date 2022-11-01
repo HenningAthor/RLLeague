@@ -1,27 +1,20 @@
 # Here we import the Match object and our multi-instance wrapper
 import datetime
-
-from rlgym.envs import Match
-from rlgym.utils import StateSetter
-from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
-import numpy as np
-import gym.spaces
-from rlgym.utils.gamestates import GameState
-from typing import Union, List
 import pickle
-
-from rlgym.utils.state_setters import StateSetter
-from rlgym.utils.state_setters import StateWrapper
 import random
-import numpy as np
+from typing import Union, List
 
+import gym.spaces
+import numpy as np
+from rlgym.envs import Match
+from rlgym.utils.action_parsers import ContinuousAction
+from rlgym.utils.gamestates import GameState
+from rlgym.utils.obs_builders import DefaultObs
 # Since we can't use the normal rlgym.make() function, we need to import all the default configuration objects to give to our Match.
 from rlgym.utils.reward_functions import DefaultReward
-from rlgym.utils.obs_builders import DefaultObs
-from rlgym.utils.state_setters import DefaultState
-from rlgym.utils.action_parsers import DefaultAction, ContinuousAction
-from rlgym.utils.terminal_conditions.common_conditions import TimeoutCondition
-
+from rlgym.utils.state_setters import StateSetter
+from rlgym.utils.state_setters import StateWrapper
+from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
 # Finally, we import the SB3 implementation of PPO.
 from stable_baselines3.ppo import PPO
 
