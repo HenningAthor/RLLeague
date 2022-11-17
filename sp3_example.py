@@ -9,6 +9,8 @@ from rlgym.utils.state_setters import DefaultState
 from rlgym.utils.action_parsers import DefaultAction
 from rlgym.utils.terminal_conditions.common_conditions import TimeoutCondition
 
+import win32gui, win32con
+
 # Finally, we import the SB3 implementation of PPO.
 from stable_baselines3.ppo import PPO
 
@@ -23,6 +25,22 @@ def get_match():
         state_setter=DefaultState(),
         action_parser=DefaultAction())
 
+def minimize_rl_windows():
+    look_for_another = True
+    def enumHandler(hwnd, lParam):
+        if win32gui.IsWindowVisible(hwnd):
+            print(win32gui.GetWindowText(hwnd))
+            if 'Rocket League' in win32gui.GetWindowText(hwnd):
+                global look_for_another
+                look_for_another = True
+                print('found rl window')
+                win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+                #rl_windows.append(hwnd)
+    
+    while look_for_another:
+        look_for_another = False
+        win32gui.EnumWindows(enumHandler, None)
+        
 
 # If we want to spawn new processes, we have to make sure our program starts in a proper Python entry point.
 if __name__ == "__main__":
