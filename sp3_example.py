@@ -181,9 +181,12 @@ class RLLeagueState(StateSetter):
             # set car state values
             car.set_pos(*pos)
             car.set_rot(yaw=yaw)
+            car.boost = 0.33
+
 
 def minimize_rl_windows():
     look_for_another = True
+
     def enumHandler(hwnd, lParam):
         if win32gui.IsWindowVisible(hwnd):
             print(win32gui.GetWindowText(hwnd))
@@ -192,13 +195,11 @@ def minimize_rl_windows():
                 look_for_another = True
                 print('found rl window')
                 win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
-                #rl_windows.append(hwnd)
-                car.boost = 0.33
 
     while look_for_another:
         look_for_another = False
         win32gui.EnumWindows(enumHandler, None)
-        
+
 
 # If we want to spawn new processes, we have to make sure our program starts in a proper Python entry point.
 if __name__ == "__main__":
@@ -228,9 +229,9 @@ if __name__ == "__main__":
         spawn_opponents=True)
 
     matches = [match1, match2]
-    env = SB3MultipleInstanceEnv(match_func_or_matches=matches, num_instances=len(matches), wait_time=20)
-    learner = PPO(policy="MlpPolicy", env=env, verbose=1)
-    learner.learn(50_000)
+    env = SB3MultipleInstanceEnv(match_func_or_matches=matches, num_instances=len(matches), wait_time=5)
+    learner = PPO(policy="MlpPolicy", env=env, verbose=1, n_epochs=1)
+    learner.learn(16_384)
     print("fin")
-    learner.learn(50_000)
+    learner.learn(16_384)
     env.reset()
