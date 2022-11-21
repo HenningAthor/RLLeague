@@ -12,7 +12,8 @@ from bot.nodes import Node
 
 
 class Bot(object):
-    def __init__(self, name):
+    def __init__(self, bot_id: int, name: str):
+        self.bot_id: int = bot_id
         self.name: str = name
 
         self.steering_root: Node = None

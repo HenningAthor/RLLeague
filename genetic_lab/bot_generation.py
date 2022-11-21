@@ -20,7 +20,7 @@ def create_bot(bot_id: int, min_depth: int, max_depth: int, env_vars: Dict) -> B
     :param env_vars: Dict of variables present in the environment.
     :return: New bot.
     """
-    bot = Bot(f'bot_{bot_id}')
+    bot = Bot(bot_id, f'bot_{bot_id}')
     bot.steering_root = create_tree(min_depth, max_depth, env_vars)
     bot.throttle_root = create_tree(min_depth, max_depth, env_vars)
     return bot
