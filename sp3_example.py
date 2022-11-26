@@ -229,7 +229,7 @@ if __name__ == "__main__":
         spawn_opponents=True)
 
     matches = [match1, match2]
-    env = SB3MultipleInstanceEnv(match_func_or_matches=matches, num_instances=len(matches), wait_time=5)
+    env = SB3MultipleInstanceEnv(match_func_or_matches=matches, num_instances=len(matches), wait_time=20)
     learner = PPO(policy="MlpPolicy", env=env, verbose=1, n_epochs=1)
     learner.learn(16_384)
     print("fin")

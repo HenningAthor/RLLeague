@@ -96,6 +96,17 @@ def league_1_step_reward(agent_idx: int, state: GameState, state_history: List[G
     """
     return movement_step_reward(agent_idx, state, state_history)
 
+def league_2_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+    """
+    Reward of each step for agents in league 1.
+
+    :param agent_idx: The index of the agent in state.
+    :param state: The state of the game.
+    :param state_history: (optional) The previous states of the game.
+    :return: float
+    """
+    return movement_step_reward(agent_idx, state, state_history)
+
 
 def league_1_game_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
