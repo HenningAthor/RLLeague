@@ -15,7 +15,8 @@ from rlgym.utils.reward_functions import DefaultReward
 from rlgym.utils.state_setters import StateSetter
 from rlgym.utils.state_setters import StateWrapper
 from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
-import win32gui, win32con
+import win32gui
+import win32con
 
 # Finally, we import the SB3 implementation of PPO.
 from stable_baselines3.ppo import PPO
