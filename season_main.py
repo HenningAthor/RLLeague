@@ -43,7 +43,7 @@ if __name__ == '__main__':
             bot.prepare_for_rlbot()
         league.add_agent(i)
 
-    season_manager = SeasonManager(n_instances=4, time_steps_per_instance=16_384, wait_time=5, minimize_windows=True, verbose=True)
+    season_manager = SeasonManager(n_instances=1, time_steps_per_instance=16_384, wait_time=5, minimize_windows=True, verbose=True)
     season_manager.add_league(league)
     season_manager.simulate_one_season()
     season_manager.finish_season()
