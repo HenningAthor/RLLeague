@@ -34,16 +34,19 @@ if __name__ == '__main__':
                      'LOGIC': ['kickoff']}
 
     step_func, game_func = league_reward_functions[1]
-    league = League(league_id=1, step_reward_func=step_func, game_reward_func=game_func)
+    league_1 = League(league_id=1, step_reward_func=step_func, game_reward_func=game_func, time_steps=16_384)
+    league_2 = League(league_id=2, step_reward_func=step_func, game_reward_func=game_func, time_steps=16_384//2)
 
     for i in range(3):
         if not os.path.exists(f"bot_storage/bot_{0}"):
             bot = create_bot(i, 5, 10, env_variables)
             print(bot.info())
             bot.prepare_for_rlbot()
-        league.add_agent(i)
+        league_1.add_agent(i)
+        league_2.add_agent(i)
 
-    season_manager = SeasonManager(n_instances=1, time_steps_per_instance=16_384, wait_time=5, minimize_windows=True, verbose=True)
-    season_manager.add_league(league)
+    season_manager = SeasonManager(n_instances=3, wait_time=5, minimize_windows=False, verbose=True, rlgym_verbose=False)
+    season_manager.add_league(league_1)
+    season_manager.add_league(league_2)
     season_manager.simulate_one_season()
     season_manager.finish_season()
