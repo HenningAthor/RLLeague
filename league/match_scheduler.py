@@ -221,6 +221,10 @@ class RLLeagueAction(ContinuousAction):
         :return: None
         """
         if self.initialized:
+            path = f"game_reports/"
+            if not os.path.exists(path):
+                os.makedirs(path)
+
             file_name = f"game_reports/{self.agent_1.bot_id}_{self.agent_2.bot_id}.txt"
             f = open(file_name, "w")
             f.write(f"{self.rew_1}\n{self.rew_2}")
@@ -338,6 +342,9 @@ class MatchScheduler(object):
         :return:
         """
         path = f"league/pending_matches/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+
         for file_name in os.listdir(f"league/pending_matches/"):
             file = path + file_name
             # construct full file path
