@@ -18,6 +18,9 @@ class Bot(object):
 
         self.steering_root: Node = None
         self.throttle_root: Node = None
+        self.jump_root: Node = None
+        self.boost_root: Node = None
+        self.handbrake_root: Node = None
 
     def __str__(self):
         return f"{self.name}"
@@ -39,6 +42,33 @@ class Bot(object):
         :return: Float between [-1.0, 1.0]
         """
         return self.throttle_root.eval(env)
+
+    def eval_jump(self, env):
+        """
+        Evaluates the jump tree.
+
+        :param env: Dict holding values for parameters.
+        :return: Bool if to jump or not.
+        """
+        return self.jump_root.eval(env) >= 0
+
+    def eval_boost(self, env):
+        """
+        Evaluates the boost tree.
+
+        :param env: Dict holding values for parameters.
+        :return: Bool if to boost or not.
+        """
+        return self.boost_root.eval(env) >= 0
+
+    def eval_handbrake(self, env):
+        """
+        Evaluates the handbrake tree.
+
+        :param env: Dict holding values for parameters.
+        :return: Bool if to use the handbrake or not.
+        """
+        return self.handbrake_root.eval(env) >= 0
 
     def bloat_analysis(self, env_stats: Dict):
         """

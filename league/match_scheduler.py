@@ -19,6 +19,8 @@ from rlgym.utils.state_setters.state_wrapper import StateWrapper
 from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
 from stable_baselines3.ppo import PPO
 
+from league.reward_functions import league_reward_functions
+
 
 def reward_movement(idx: int, state: GameState):
     return np.linalg.norm(state.players[idx].inverted_car_data.linear_velocity)
@@ -88,8 +90,12 @@ class RLLeagueAction(ContinuousAction):
         self.id_2 = -1
         self.agent_1 = None
         self.agent_2 = None
+
+        self.state_history = []
         self.rew_1 = 0.0
         self.rew_2 = 0.0
+        self.step_reward_func = None
+        self.game_reward_func = None
 
         self.verbose = verbose
 
@@ -130,6 +136,7 @@ class RLLeagueAction(ContinuousAction):
         self.agent_2 = pickle.load(open(path_2, 'rb'))
         self.rew_1 = 0.0
         self.rew_2 = 0.0
+        self.step_reward_func, self.game_reward_func = league_reward_functions[self.league_id]
         self.initialized = True
         if self.verbose: print(f"RLLeagueAction {self.action_id}: Loaded agent {self.id_1} and {self.id_2} in league {self.league_id}")
 
@@ -140,8 +147,8 @@ class RLLeagueAction(ContinuousAction):
         if not self.initialized:
             return np.zeros(actions.shape)
 
-        self.rew_1 += reward_movement(0, state)
-        self.rew_2 += reward_movement(1, state)
+        self.rew_1 += self.step_reward_func(0, state)
+        self.rew_2 += self.step_reward_func(1, state)
 
         env_1 = {'ARITHMETIC': {'my_car_x': state.players[0].inverted_car_data.position[0],
                                 'my_car_y': state.players[0].inverted_car_data.position[1],
@@ -218,6 +225,8 @@ class RLLeagueAction(ContinuousAction):
         actions[0][1] = self.agent_1.eval_steering(env_1)
         actions[1][0] = self.agent_2.eval_throttle(env_2)
         actions[1][1] = self.agent_2.eval_steering(env_2)
+
+        self.state_history.append(state)
 
         return actions
 
