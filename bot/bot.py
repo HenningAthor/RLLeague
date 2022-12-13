@@ -89,12 +89,21 @@ class Bot(object):
         """
         n_steering = count_nodes(self.steering_root)
         n_throttle = count_nodes(self.throttle_root)
+        n_jump = count_nodes(self.jump_root)
+        n_boost = count_nodes(self.boost_root)
+        n_handbrake = count_nodes(self.handbrake_root)
 
         n_non_bloat_steering_nodes = count_non_bloat_nodes(self.steering_root)
         n_non_bloat_throttle_nodes = count_non_bloat_nodes(self.throttle_root)
+        n_non_bloat_jump_nodes = count_non_bloat_nodes(self.jump_root)
+        n_non_bloat_boost_nodes = count_non_bloat_nodes(self.boost_root)
+        n_non_bloat_handbrake_nodes = count_non_bloat_nodes(self.handbrake_root)
 
         steering_leaf_nodes = leaf_type_count(self.steering_root)
         throttle_leaf_nodes = leaf_type_count(self.throttle_root)
+        jump_leaf_nodes = leaf_type_count(self.jump_root)
+        boost_leaf_nodes = leaf_type_count(self.boost_root)
+        handbrake_leaf_nodes = leaf_type_count(self.handbrake_root)
 
         s = f'*** {self.name} ***\n'
         s += f'-- Steering --\n'
@@ -106,6 +115,21 @@ class Bot(object):
         s += f'#nodes: {n_throttle}\n'
         s += f'#non bloat nodes: {n_non_bloat_throttle_nodes}\n'
         s += f'leaf nodes: {throttle_leaf_nodes}\n'
+        s += f'\n'
+        s += f'-- Jump --\n'
+        s += f'#nodes: {n_jump}\n'
+        s += f'#non bloat nodes: {n_non_bloat_jump_nodes}\n'
+        s += f'leaf nodes: {jump_leaf_nodes}\n'
+        s += f'\n'
+        s += f'-- Boost --\n'
+        s += f'#nodes: {n_boost}\n'
+        s += f'#non bloat nodes: {n_non_bloat_boost_nodes}\n'
+        s += f'leaf nodes: {boost_leaf_nodes}\n'
+        s += f'\n'
+        s += f'-- Handbrake --\n'
+        s += f'#nodes: {n_handbrake}\n'
+        s += f'#non bloat nodes: {n_non_bloat_handbrake_nodes}\n'
+        s += f'leaf nodes: {handbrake_leaf_nodes}\n'
         return s
 
     def prepare_for_rlbot(self):

@@ -223,8 +223,15 @@ class RLLeagueAction(ContinuousAction):
         actions = np.zeros(actions.shape)
         actions[0][0] = self.agent_1.eval_throttle(env_1)
         actions[0][1] = self.agent_1.eval_steering(env_1)
+        actions[0][5] = int(self.agent_1.eval_jump(env_1) > 0)
+        actions[0][6] = int(self.agent_1.eval_boost(env_1) > 0)
+        actions[0][7] = int(self.agent_1.eval_handbrake(env_1) > 0)
+
         actions[1][0] = self.agent_2.eval_throttle(env_2)
         actions[1][1] = self.agent_2.eval_steering(env_2)
+        actions[1][5] = int(self.agent_2.eval_jump(env_2) > 0)
+        actions[1][6] = int(self.agent_2.eval_boost(env_2) > 0)
+        actions[1][7] = int(self.agent_2.eval_handbrake(env_2) > 0)
 
         self.state_history.append(state)
 

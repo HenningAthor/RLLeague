@@ -491,3 +491,4 @@ def league_1_game_reward(agent_idx: int, state: GameState, state_history: List[G
 
 
 league_reward_functions[1] = (league_1_step_reward, league_1_game_reward)
+league_reward_functions[2] = (league_1_step_reward, league_1_game_reward)
