@@ -6,17 +6,17 @@ class SeasonManager(object):
     """
     This object manages all leagues and simulates the seasons for each league.
     """
-    def __init__(self, n_instances, time_steps_per_instance, wait_time=20, minimize_windows=True, verbose=True):
+    def __init__(self, n_instances, wait_time=20, minimize_windows=True, verbose=True, rlgym_verbose=False):
         """
         Initializes the season manager.
 
         :param n_instances: Number of windows for simulation.
-        :param time_steps_per_instance: How long the bots play against each other.
         :param wait_time: How long to wait before opening another rl window.
         :param minimize_windows: If the windows should be minimized.
         :param verbose: If the class should print.
+        :param rlgym_verbose: If rlgym should print (not everything can be disabled).
         """
-        self.match_scheduler = MatchScheduler(n_instances=n_instances, time_steps_per_instance=time_steps_per_instance, wait_time=wait_time, minimize_windows=minimize_windows, verbose=verbose)
+        self.match_scheduler = MatchScheduler(n_instances=n_instances, wait_time=wait_time, minimize_windows=minimize_windows, verbose=verbose)
         self.leagues = {}
 
     def simulate_one_season(self) -> None:
@@ -31,7 +31,8 @@ class SeasonManager(object):
 
         for match in matches:
             league_id, id_1, id_2 = match
-            self.match_scheduler.add_match(league_id, id_1, id_2)
+            time_steps = self.leagues[league_id].time_steps
+            self.match_scheduler.add_match(league_id, id_1, id_2, time_steps)
 
         self.match_scheduler.simulate()
 
