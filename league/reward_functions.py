@@ -23,6 +23,7 @@ Functions are inspired by reward functions of https://github.com/lucas-emery/roc
 1. Step Reward functions
 """
 
+
 def get_enemy_goal_pos(agent_idx: int, state: GameState) -> ndarray:
     """
     :param agent_idx: The index of the agent in state.
@@ -80,7 +81,8 @@ def boost_difference_step_reward(agent_idx: int, state: GameState, state_history
 
 
 # TODO Wie bzw. soll hinzugefügt werden, das Reward geringer, wenn Ball öfter berührt, aber kein Tor fällt? (Dribbeln wird schlechter gemacht)
-def ball_touched_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None, aerial_weight: float = 0.0) -> float:
+def ball_touched_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None,
+                             aerial_weight: float = 0.0) -> float:
     """
     :param aerial_weight: value in range [0.0, 1.0] (importance of ball height during touch)
     :param agent_idx: The index of the agent in state.
@@ -94,19 +96,18 @@ def ball_touched_step_reward(agent_idx: int, state: GameState, state_history: Li
     else:
         return 0
 
+
 # Sollte zusätzlich überprüft werden ob der Demo sinnvoll war? oder regelt sich das durch z.B. ein Gegentor selbst?
-# TODO überarbeiten, player2 sind aktuell beide Spieler
 def demo_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
-    This is a placeholder function for a step reward function.
-
     :param agent_idx: The index of the agent in state.
     :param state: The state of the game.
     :param state_history: (optional) The previous states of the game.
-    :return: float
+    :return: if enemy player is demoed, return 1, else 0
     """
-    for player2 in state.players:
-        if player2.is_demoed:
+
+    for player in state.players:
+        if player != state.players[agent_idx] and player.is_demoed:
             return 1
         else:
             return 0
@@ -128,7 +129,8 @@ def distance_player_ball_step_reward(agent_idx: int, state: GameState, state_his
     return np.exp(-0.5 * dist / CAR_MAX_SPEED)
 
 
-def distance_ball_enemy_goal_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+def distance_ball_enemy_goal_step_reward(agent_idx: int, state: GameState,
+                                         state_history: List[GameState] = None) -> float:
     """
     Get position of enemy goal.
     Calculate distance between ball and enemy goal (position of goal is set from center to back,
@@ -164,12 +166,12 @@ def facing_ball_step_reward(agent_idx: int, state: GameState, state_history: Lis
 
     return float(np.dot(state.players[agent_idx].car_data.forward(), norm_pos_diff))
 
-# TODO Exception wenn Gewichte zusammen über 1.0
+
 def align_ball_goal_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None,
                                 defense_weight: float = 0.5, offense_weight: float = 0.5) -> float:
     """
     Gets positions of ball, player, and both goals.
-    Calculates with the offensive and defensive weights the similarity of the vectors
+    Calculates with the offensive and defensive weights the similarity of the vectors'
     player <-> ball and player <-> net.
 
     :param offense_weight: value in range [0.0, 1.0] (importance of the offensive reward,
@@ -182,6 +184,9 @@ def align_ball_goal_step_reward(agent_idx: int, state: GameState, state_history:
     :return: sum of offensive and defensive reward
     """
 
+    if (defense_weight + offense_weight) > 1.0:
+        raise ValueError("Offensive and defensive weights should be in sum -> 1.0")
+
     ball = state.ball.position
     pos = state.players[agent_idx].car_data.position
     protect_goal_pos = np.array(BLUE_GOAL_BACK)
@@ -192,11 +197,11 @@ def align_ball_goal_step_reward(agent_idx: int, state: GameState, state_history:
 
     # Align player->ball and net->player vectors
     defensive_reward = defense_weight * math.cosine_similarity(ball - pos,
-                                                             pos - protect_goal_pos)
+                                                               pos - protect_goal_pos)
 
     # Align player->ball and player->net vectors
     offensive_reward = offense_weight * math.cosine_similarity(ball - pos,
-                                                             attack_goal_pos - pos)
+                                                               attack_goal_pos - pos)
 
     return defensive_reward + offensive_reward
 
@@ -251,7 +256,8 @@ def behind_ball_step_reward(agent_idx: int, state: GameState, state_history: Lis
         return 0
 
 
-def velocity_player_to_ball_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+def velocity_player_to_ball_step_reward(agent_idx: int, state: GameState,
+                                        state_history: List[GameState] = None) -> float:
     """
     Calculates velocity of the player and sets it in relation to the maximum possible velocity.
     Calculates the vector of the player to the car.
@@ -321,7 +327,8 @@ def forward_velocity_step_reward(agent_idx: int, state: GameState, state_history
     return player.car_data.linear_velocity[0] * (np.linalg.norm(player.car_data.linear_velocity) / CAR_MAX_SPEED)
 
 
-def distance_ball_to_own_backwall_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None, exponent: int = 1) -> float:
+def distance_ball_to_own_backwall_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None,
+                                              exponent: int = 1) -> float:
     """
     Calculates the ball distance to the backwall of the player.
 
@@ -334,14 +341,14 @@ def distance_ball_to_own_backwall_step_reward(agent_idx: int, state: GameState, 
 
     if state.players[agent_idx].team_num == BLUE_TEAM:
         return (state.ball.position[1] / (
-                    BACK_WALL_Y + BALL_RADIUS)) ** exponent
+                BACK_WALL_Y + BALL_RADIUS)) ** exponent
     else:
         return (state.inverted_ball.position[1] / (
-                    BACK_WALL_Y + BALL_RADIUS)) ** exponent
+                BACK_WALL_Y + BALL_RADIUS)) ** exponent
 
 
 # TODO inverted Ball Position wenn anderes Team
-#def time_ball_enemy_half_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+# def time_ball_enemy_half_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
 #    """
 #    This is a placeholder function for a step reward function.
 #
@@ -356,6 +363,7 @@ def distance_ball_to_own_backwall_step_reward(agent_idx: int, state: GameState, 
 #    else:
 #        return 0
 
+
 # auch hier "* (1 - 2 * self.negative)"?
 def velocity_ball_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
@@ -369,14 +377,15 @@ def velocity_ball_step_reward(agent_idx: int, state: GameState, state_history: L
 
     return np.linalg.norm(state.ball.linear_velocity) / BALL_MAX_SPEED
 
+
 """
 2. Goal score Reward functions
 """
 
-# TODO wenn ein Tor mehr bei einem Team, dann Reward geben
+
 def goal_scored_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
-    Reward of 0.5 is given for a goal and a additional reward up to 0.5 depending on the ball speed when scoring.
+    Reward of 0.5 is given for a goal and an additional reward up to 0.5 depending on the ball speed when scoring.
 
     :param agent_idx: The index of the agent in state.
     :param state: The state of the game.
@@ -384,11 +393,25 @@ def goal_scored_reward(agent_idx: int, state: GameState, state_history: List[Gam
     :return: reward in range [0.0, 1.0]
     """
 
-    ball_velocity = velocity_ball_to_goal_step_reward(agent_idx, state)
+    player_score = None
+    prev_player_score = None
 
-    return 0.5 + (0.5 * ball_velocity)
+    if agent_idx == 0:
+        player_score = state.blue_score
+        prev_player_score = state_history[-1].blue_score
+    elif agent_idx == 1:
+        player_score = state.orange_score
+        prev_player_score = state_history[-1].orange_score
 
-#def get_scored_on_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+    if player_score > prev_player_score:
+        ball_velocity = velocity_ball_to_goal_step_reward(agent_idx, state)
+
+        return 0.5 + (0.5 * ball_velocity)
+    else:
+        return 0
+
+
+# def get_scored_on_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
 #    """
 #
 #
@@ -406,16 +429,16 @@ def goal_scored_reward(agent_idx: int, state: GameState, state_history: List[Gam
 3. Kickoff Reward functions
 """
 
-# TODO Position[1] gleich 0 und Geschwindigkeit gleich 0 (Norm bei Geschwindigkeit)
+
 def kickoff_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
     :param agent_idx: The index of the agent in state.
     :param state: The state of the game.
     :param state_history: (optional) The previous states of the game.
-    :return: if ball position is zero (kickoff), return velocity_player_to_ball_step_reward(), else 0
+    :return: if ball position and velocity is zero (kickoff), return velocity_player_to_ball_step_reward(), else 0
     """
 
-    if state.ball.position[1] == 0:
+    if state.ball.position[1] == 0 and np.linalg.norm(state.ball.linear_velocity) == 0:
         return velocity_player_to_ball_step_reward(agent_idx, state)
     else:
         return 0
@@ -440,8 +463,7 @@ def winning_game_reward(agent_idx: int, state: GameState, state_history: List[Ga
             return 1
         else:
             return 0
-
-    if agent_idx == 1:
+    elif agent_idx == 1:
         if state.blue_score < state.orange_score:
             return 1
         else:
@@ -454,6 +476,29 @@ League reward functions.
 # dictionary of int: (callable, callable) (league_id: (step_reward, game_reward))
 league_reward_functions = {}
 
+"""
+reward += constant_reward_step_reward(agent_idx, state, state_history)
+reward += kickoff_reward(agent_idx, state, state_history)
+reward += goal_scored_reward(agent_idx, state, state_history)
+reward += boost_amount_step_reward(agent_idx, state, state_history)
+reward += boost_difference_step_reward(agent_idx, state, state_history)
+reward += ball_touched_step_reward(agent_idx, state, state_history)
+reward += demo_step_reward(agent_idx, state, state_history)
+reward += distance_player_ball_step_reward(agent_idx, state, state_history)
+reward += distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+reward += facing_ball_step_reward(agent_idx, state, state_history)
+reward += align_ball_goal_step_reward(agent_idx, state, state_history)
+reward += closest_to_ball_step_reward(agent_idx, state, state_history)
+reward += touched_ball_last_step_reward(agent_idx, state, state_history)
+reward += behind_ball_step_reward(agent_idx, state, state_history)
+reward += velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+reward += velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+reward += velocity_player_step_reward(agent_idx, state, state_history)
+reward += forward_velocity_step_reward(agent_idx, state, state_history)
+reward += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
+reward += velocity_ball_step_reward(agent_idx, state, state_history)
+"""
+
 
 def league_1_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
@@ -464,18 +509,139 @@ def league_1_step_reward(agent_idx: int, state: GameState, state_history: List[G
     :param state_history: (optional) The previous states of the game.
     :return: float
     """
-    return velocity_player_step_reward(agent_idx, state, state_history)
+
+    constant_rew = constant_reward_step_reward(agent_idx, state, state_history)
+    kickoff_rew = 1.0 * kickoff_reward(agent_idx, state, state_history)
+    goal_scored_rew = 1.0 * goal_scored_reward(agent_idx, state, state_history)
+
+    step_rew = 0.0
+    # step_rew += boost_amount_step_reward(agent_idx, state, state_history)
+    # step_rew += boost_difference_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * ball_touched_step_reward(agent_idx, state, state_history)
+    # step_rew += demo_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * behind_ball_step_reward(agent_idx, state, state_history)
+    # step_rew += velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+    # step_rew += velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.1 * forward_velocity_step_reward(agent_idx, state, state_history)
+    # step_rew += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
+    # step_rew += velocity_ball_step_reward(agent_idx, state, state_history)
+
+    return constant_rew + kickoff_rew + goal_scored_rew + step_rew
+
 
 def league_2_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
     """
-    Reward of each step for agents in league 1.
+    Reward of each step for agents in league 2.
 
     :param agent_idx: The index of the agent in state.
     :param state: The state of the game.
     :param state_history: (optional) The previous states of the game.
     :return: float
     """
-    return velocity_player_step_reward(agent_idx, state, state_history)
+
+    constant_rew = constant_reward_step_reward(agent_idx, state, state_history)
+    kickoff_rew = 1.25 * kickoff_reward(agent_idx, state, state_history)
+    goal_scored_rew = 1.25 * goal_scored_reward(agent_idx, state, state_history)
+
+    step_rew = 0.0
+    # step_rew += boost_amount_step_reward(agent_idx, state, state_history)
+    # step_rew += boost_difference_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * ball_touched_step_reward(agent_idx, state, state_history)
+    # step_rew += demo_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * behind_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * forward_velocity_step_reward(agent_idx, state, state_history)
+    # step_rew += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
+    step_rew += 0.077 * velocity_ball_step_reward(agent_idx, state, state_history)
+
+    return constant_rew + kickoff_rew + goal_scored_rew + step_rew
+
+
+def league_3_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+    """
+    Reward of each step for agents in league 2.
+
+    :param agent_idx: The index of the agent in state.
+    :param state: The state of the game.
+    :param state_history: (optional) The previous states of the game.
+    :return: float
+    """
+
+    constant_rew = constant_reward_step_reward(agent_idx, state, state_history)
+    kickoff_rew = 1.5 * kickoff_reward(agent_idx, state, state_history)
+    goal_scored_rew = 1.5 * goal_scored_reward(agent_idx, state, state_history)
+
+    step_rew = 0.0
+    step_rew += 0.0666 * boost_amount_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * boost_difference_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * ball_touched_step_reward(agent_idx, state, state_history)
+    # step_rew += demo_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * behind_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * forward_velocity_step_reward(agent_idx, state, state_history)
+    # step_rew += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0666 * velocity_ball_step_reward(agent_idx, state, state_history)
+
+    return constant_rew + kickoff_rew + goal_scored_rew + step_rew
+
+
+def league_4_step_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
+    """
+    Reward of each step for agents in league 2.
+
+    :param agent_idx: The index of the agent in state.
+    :param state: The state of the game.
+    :param state_history: (optional) The previous states of the game.
+    :return: float
+    """
+
+    constant_rew = constant_reward_step_reward(agent_idx, state, state_history)
+    kickoff_rew = 1.75 * kickoff_reward(agent_idx, state, state_history)
+    goal_scored_rew = 1.75 * goal_scored_reward(agent_idx, state, state_history)
+
+    step_rew = 0.0
+    step_rew += 0.0588 * boost_amount_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * boost_difference_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * ball_touched_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * demo_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * behind_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * forward_velocity_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0588 * velocity_ball_step_reward(agent_idx, state, state_history)
+
+    return constant_rew + kickoff_rew + goal_scored_rew + step_rew
 
 
 def league_1_game_reward(agent_idx: int, state: GameState, state_history: List[GameState] = None) -> float:
@@ -491,4 +657,6 @@ def league_1_game_reward(agent_idx: int, state: GameState, state_history: List[G
 
 
 league_reward_functions[1] = (league_1_step_reward, league_1_game_reward)
-league_reward_functions[2] = (league_1_step_reward, league_1_game_reward)
+league_reward_functions[2] = (league_2_step_reward, league_1_game_reward)
+league_reward_functions[3] = (league_3_step_reward, league_1_game_reward)
+league_reward_functions[4] = (league_4_step_reward, league_1_game_reward)
