@@ -37,15 +37,15 @@ if __name__ == '__main__':
     league_1 = League(league_id=1, step_reward_func=step_func, game_reward_func=game_func, time_steps=16_384)
     league_2 = League(league_id=2, step_reward_func=step_func, game_reward_func=game_func, time_steps=16_384//2)
 
-    for i in range(3):
-        if not os.path.exists(f"bot_storage/bot_{0}"):
+    for i in range(5):
+        if not os.path.exists(f"bot_storage/bot_{i}"):
             bot = create_bot(i, 5, 10, env_variables)
             print(bot.info())
             bot.prepare_for_rlbot()
         league_1.add_agent(i)
         league_2.add_agent(i)
 
-    season_manager = SeasonManager(n_instances=3, wait_time=5, minimize_windows=False, verbose=True, rlgym_verbose=False)
+    season_manager = SeasonManager(n_instances=3, wait_time=30, minimize_windows=False, verbose=True, rlgym_verbose=False)
     season_manager.add_league(league_1)
     season_manager.add_league(league_2)
     season_manager.simulate_one_season()
