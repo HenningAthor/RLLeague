@@ -1,5 +1,3 @@
-import rlbot.runner as runner
-
 from genetic_lab.bot_generation import create_bot
 
 if __name__ == '__main__':
@@ -42,4 +40,3 @@ if __name__ == '__main__':
     bot = create_bot(3, 5, 10, env_variables)
     print(bot.info())
     bot.prepare_for_rlbot()
-    # runner.main()
