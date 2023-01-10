@@ -142,6 +142,9 @@ class Bot(object):
         :return: None
         """
         # generate directory in bot storage
+        if not os.path.exists(f'bot_storage/'):
+            os.mkdir(f'bot_storage/')
+
         if not os.path.exists(f'bot_storage/{self.name}/'):
             os.mkdir(f'bot_storage/{self.name}/')
 
