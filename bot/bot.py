@@ -4,7 +4,10 @@ Implements the bot.
 
 import os
 import pickle
+import copy
 from typing import Dict
+
+import numpy as np
 
 from bot.nodes import count_nodes, leaf_type_count, bloat_analysis, \
     count_non_bloat_nodes
@@ -21,6 +24,8 @@ class Bot(object):
         self.jump_root: Node = None
         self.boost_root: Node = None
         self.handbrake_root: Node = None
+
+        self.creation_variables = {}
 
     def __str__(self):
         return f"{self.name}"
@@ -50,7 +55,7 @@ class Bot(object):
         :param env: Dict holding values for parameters.
         :return: Bool if to jump or not.
         """
-        return self.jump_root.eval(env) >= 0
+        return self.jump_root.eval(env)
 
     def eval_boost(self, env):
         """
@@ -59,7 +64,7 @@ class Bot(object):
         :param env: Dict holding values for parameters.
         :return: Bool if to boost or not.
         """
-        return self.boost_root.eval(env) >= 0
+        return self.boost_root.eval(env)
 
     def eval_handbrake(self, env):
         """
@@ -68,7 +73,30 @@ class Bot(object):
         :param env: Dict holding values for parameters.
         :return: Bool if to use the handbrake or not.
         """
-        return self.handbrake_root.eval(env) >= 0
+        return self.handbrake_root.eval(env)
+
+    def eval_all(self, env):
+        """
+        Evaluates all trees and returns the result as numpy array.
+
+        :param env: Dict holding values for parameters.
+        :return: Array of size 8
+        """
+        n = env[list(env.keys())[0]][list(env[list(env.keys())[0]].keys())[0]].shape[0]
+        res = np.zeros(shape=(n, 8), dtype=float)
+        res[:, 0] = self.eval_throttle(env) < 0.0  # throttle
+        res[:, 1] = self.eval_steering(env) < 0.0  # steer
+        res[:, 2] = 0.0  # pitch
+        res[:, 3] = 0.0  # yaw
+        res[:, 4] = 0.0  # roll
+        res[:, 5] = self.eval_jump(env) < 0.0  # jump
+        res[:, 6] = self.eval_boost(env) < 0.0   # boost
+        res[:, 7] = self.eval_handbrake(env) < 0.0  # handbrake
+
+        res[:, 0] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
+        res[:, 1] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
+
+        return res
 
     def bloat_analysis(self, env_stats: Dict):
         """
@@ -80,6 +108,33 @@ class Bot(object):
         """
         bloat_analysis(self.steering_root, env_stats)
         bloat_analysis(self.throttle_root, env_stats)
+
+    def mutate(self, node_probability: float):
+        """
+        Deep-copies the bot and mutates it. The copy is returned.
+
+        :param node_probability: Probability of each node changing
+        :return: Mutated copy
+        """
+        new_bot = copy.deepcopy(self)
+
+        work_list = []
+        work_list.extend(new_bot.throttle_root.children)
+        work_list.extend(new_bot.steering_root.children)
+        work_list.extend(new_bot.jump_root.children)
+        work_list.extend(new_bot.boost_root.children)
+        work_list.extend(new_bot.handbrake_root.children)
+
+        while work_list:
+            node = work_list.pop()
+
+            if np.random.uniform(0.0, 1.0) < node_probability:
+                # mutate the node
+                node.mutate(self.creation_variables)
+
+            work_list.extend(node.children)
+
+        return new_bot
 
     def info(self):
         """
