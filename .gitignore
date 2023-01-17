@@ -3,3 +3,5 @@ __pycache__/
 data_scraping/replays
 
 bot_storage/*
+
+recorded_data/*
