@@ -32,7 +32,6 @@ class Node(object):
         :return: None
         """
         self.children.append(child)
-        child.parent = self
         self.num_children += 1
 
     def remove_child(self, child: 'Node'):
@@ -43,7 +42,6 @@ class Node(object):
         :param child: Another root.
         :return: None
         """
-        child.parent = None
         self.children.remove(child)
         self.num_children -= 1
 
@@ -84,6 +82,12 @@ class Node(object):
         :return: None
         """
         raise NotImplementedError
+
+    def mutate(self, env_vars):
+        """
+        Mutates the node. This can change the type or internal constants.
+        """
+        pass
 
 
 class ArithmeticNode(Node):
@@ -313,7 +317,7 @@ class SumNode(ArithmeticNode):
         Will be passed on to the children.
         :return: Sum
         """
-        res = 0
+        res = 0.0
         for child in self.children:
             res += child.eval(environment)
         return res
@@ -327,6 +331,27 @@ class SumNode(ArithmeticNode):
         """
         self.bloat_min = sum(c.bloat_min for c in self.children)
         self.bloat_max = sum(c.bloat_max for c in self.children)
+
+    def mutate(self, env_vars):
+        """
+        Change the node with a ProductNode.
+        """
+        # create the product node
+        node = ProductNode()
+        node.parent = self.parent
+        node.children = self.children
+
+        # manage connections with parent
+        if self.parent is not None:
+            self.parent.add_child(node)
+            self.parent.remove_child(self)
+
+        # manage connections with children
+        for child in self.children:
+            child.parent = node
+
+        # delete self
+        del self
 
 
 class ProductNode(ArithmeticNode):
@@ -349,7 +374,7 @@ class ProductNode(ArithmeticNode):
         Will be passed on to the children.
         :return: Product
         """
-        res = 1
+        res = 1.0
         for child in self.children:
             res *= child.eval(environment)
         return res
@@ -364,6 +389,27 @@ class ProductNode(ArithmeticNode):
         # TODO: Think about this!
         self.bloat_min = math.prod(c.bloat_min for c in self.children)
         self.bloat_max = math.prod(c.bloat_max for c in self.children)
+
+    def mutate(self, env_vars):
+        """
+        Change the node with a SumNode.
+        """
+        # create the product node
+        node = SumNode()
+        node.parent = self.parent
+        node.children = self.children
+
+        # manage connections with parent
+        if self.parent is not None:
+            self.parent.add_child(node)
+            self.parent.remove_child(self)
+
+        # manage connections with children
+        for child in self.children:
+            child.parent = node
+
+        # delete self
+        del self
 
 
 class AndNode(LogicalNode):
@@ -387,7 +433,7 @@ class AndNode(LogicalNode):
         """
         res = True
         for child in self.children:
-            res = res and child.eval(environment)
+            res = res & child.eval(environment)
         return res
 
     def determine_bloat(self):
@@ -402,6 +448,27 @@ class AndNode(LogicalNode):
         for child in self.children:
             self.bloat_min = self.bloat_min and child.bloat_min
             self.bloat_max = self.bloat_max and child.bloat_max
+
+    def mutate(self, env_vars):
+        """
+        Change the node with a OrNode.
+        """
+        # create the product node
+        node = OrNode()
+        node.parent = self.parent
+        node.children = self.children
+
+        # manage connections with parent
+        if self.parent is not None:
+            self.parent.add_child(node)
+            self.parent.remove_child(self)
+
+        # manage connections with children
+        for child in self.children:
+            child.parent = node
+
+        # delete self
+        del self
 
 
 class OrNode(LogicalNode):
@@ -427,9 +494,9 @@ class OrNode(LogicalNode):
         Will be passed on to the children.
         :return: Logical OR
         """
-        res = True
+        res = False
         for child in self.children:
-            res = res or child.eval(environment)
+            res = res | child.eval(environment)
         return res
 
     def determine_bloat(self):
@@ -444,6 +511,27 @@ class OrNode(LogicalNode):
         for child in self.children:
             self.bloat_min = self.bloat_min or child.bloat_min
             self.bloat_max = self.bloat_max or child.bloat_max
+
+    def mutate(self, env_vars):
+        """
+        Change the node with a AndNode.
+        """
+        # create the product node
+        node = AndNode()
+        node.parent = self.parent
+        node.children = self.children
+
+        # manage connections with parent
+        if self.parent is not None:
+            self.parent.add_child(node)
+            self.parent.remove_child(self)
+
+        # manage connections with children
+        for child in self.children:
+            child.parent = node
+
+        # delete self
+        del self
 
 
 class SmallerNode(ComparisonNode):
@@ -737,7 +825,7 @@ class NegationNode(LogicalNode):
         Will be passed on to the children.
         :return: Not c1
         """
-        res = not self.children[0].eval(environment)
+        res = ~self.children[0].eval(environment)
         return res
 
     def determine_bloat(self):
@@ -775,10 +863,12 @@ class DecisionNode(Node):
         Will be passed on to the children.
         :return: c1 or c2, depending on c0.
         """
-        if self.children[0].eval(environment):
-            res = self.children[1].eval(environment)
-        else:
-            res = self.children[2].eval(environment)
+        decision = self.children[0].eval(environment)
+        res1 = self.children[1].eval(environment)
+        res2 = self.children[2].eval(environment)
+
+        res = (decision * res1) + (1 - decision) * res2
+
         return res
 
     def construct_tree(self, depth: int, min_depth: int, max_depth: int,
@@ -895,6 +985,12 @@ class ConstantNode(Node):
         self.bloat_min = self.constant
         self.bloat_max = self.constant
 
+    def mutate(self, env_vars):
+        """
+        Change the constant.
+        """
+        self.constant = np.random.random_sample()
+
 
 class ArithmeticParameterNode(Node):
     """
@@ -945,6 +1041,12 @@ class ArithmeticParameterNode(Node):
         # bloat can not be calculated by this function currently!
         pass
 
+    def mutate(self, env_vars):
+        """
+        Choose a new variable.
+        """
+        self.parameter = np.random.choice(env_vars['ARITHMETIC'])
+
 
 class LogicParameterNode(Node):
     """
@@ -994,6 +1096,12 @@ class LogicParameterNode(Node):
         """
         # bloat can not be calculated by this function currently!
         pass
+
+    def mutate(self, env_vars):
+        """
+        Choose a new variable.
+        """
+        self.parameter = np.random.choice(env_vars['LOGIC'])
 
 
 # available types, nodes and probabilities
