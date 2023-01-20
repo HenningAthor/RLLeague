@@ -2,11 +2,10 @@
 Implements the generation of new bots. This is accomplished through a grammar.
 """
 
-import numpy as np
-from typing import Dict
+from typing import Dict, List
 
 from bot.bot import Bot
-from bot.nodes import Node, all_nodes, DecisionNode, LogicParameterNode
+from bot.nodes import Node, DecisionNode
 
 
 def create_bot(bot_id: int, min_depth: int, max_depth: int, env_vars: Dict) -> Bot:
@@ -30,7 +29,9 @@ def create_bot(bot_id: int, min_depth: int, max_depth: int, env_vars: Dict) -> B
     return bot
 
 
-def create_tree(min_depth: int, max_depth: int, env_vars: Dict) -> Node:
+def create_tree(min_depth: int,
+                max_depth: int,
+                env_vars: Dict[str, List[str]]) -> Node:
     """
     Creates a tree after a formal grammar. After min_depth the probability a
     leaf will occur rises, until it is at 100% at max_depth. The root is at
