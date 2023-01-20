@@ -1,0 +1,48 @@
+"""
+Script to analyze the downloaded_matches. It will determine the min and max value
+for each column over all matches. This information can help with determining
+bloat in the evolution trees.
+The result will be printed in the min_max.csv file and saved in recorded_data.
+The first row are the max values and the second row are the min values.
+The script needs about 4 hours to complete.
+"""
+import csv
+
+import glob
+import numpy as np
+from tqdm import tqdm
+
+if __name__ == '__main__':
+    file_list = []
+    file_list.extend(list(glob.glob('recorded_data/downloaded_matches/*.csv')))
+
+    headers = []
+    min_values = []
+    max_values = []
+
+    for file_path in tqdm(file_list):
+        game_data = np.genfromtxt(file_path, dtype='float32', delimiter=',', skip_header=True)
+        f = open(file_path, 'r')
+        reader = csv.reader(f)
+        file_headers = list(next(reader, None))
+        f.close()
+
+        # initialize the headers
+        if not headers:
+            headers = file_headers
+            min_values = [float('inf') for i in range(len(headers))]
+            max_values = [-float('inf') for i in range(len(headers))]
+
+        for i, name in enumerate(file_headers):
+            idx = headers.index(name)
+
+            min_values[i] = min(min_values[i], np.min(game_data[:, i]))
+            max_values[i] = max(max_values[i], np.max(game_data[:, i]))
+
+    s = ','.join(headers) + '\n'
+    s = s + ','.join([str(x) for x in max_values]) + '\n'
+    s = s + ','.join([str(x) for x in min_values])
+
+    f = open('recorded_data/min_max.csv', 'w')
+    f.write(s)
+    f.close()
