@@ -1,14 +1,21 @@
+"""
+Script to train one bot via evolution.
+It will use a downloaded match to test the performance of the bot.
+The bot will be mutated 100 times and the mutated bot with the smallest error is
+chosen next for mutation. This process is repeated 100 times.
+"""
+
 import csv
 
 import numpy as np
-from numpy import genfromtxt
 
 from genetic_lab.bot_generation import create_bot
 
 if __name__ == '__main__':
     # load the game data
-    game_data = genfromtxt('recorded_data/res.csv', delimiter=',', skip_header=True)
-    f = open('recorded_data/res.csv', 'r')
+    csv_file_path = 'recorded_data/downloaded_matches/a11526b4-ea11-4214-bdb2-804bdcf531ee.csv'
+    game_data = np.genfromtxt(csv_file_path, dtype='float32', delimiter=',', skip_header=True)
+    f = open(csv_file_path, 'r')
     reader = csv.reader(f)
     headers = list(next(reader, None))
     f.close()
@@ -20,10 +27,6 @@ if __name__ == '__main__':
     labels = s[0]
     features_header = headers[:-16]
     labels_header = headers[-16:-8]
-
-    # remove ticks_since_last_transmit from features
-    features = features[:, 1:]
-    features_header = features_header[1:]
 
     env_variables = {'ARITHMETIC': ['inverted_ball/pos_x',
                                     'inverted_ball/pos_y',
@@ -56,12 +59,14 @@ if __name__ == '__main__':
     bot_list = []
     err_list = []
     n_bots = 100
+    mutate_chance = 0.01
     # create a bot
     bot = create_bot(0, 5, 10, env_variables)
+    print(bot.info())
     bot_list.append(bot)
     err_list.append(0.0)
     for i in range(n_bots-1):
-        mutated_bot = bot.mutate(0.05)
+        mutated_bot = bot.mutate(mutate_chance)
         bot_list.append(mutated_bot)
         err_list.append(0.0)
 
@@ -91,7 +96,7 @@ if __name__ == '__main__':
         bot_list = [min_bot]
         err_list = [0.0]
         for i in range(n_bots-1):
-            mutated_bot = min_bot.mutate(0.05)
+            mutated_bot = min_bot.mutate(mutate_chance)
             bot_list.append(mutated_bot)
             err_list.append(0.0)
 
