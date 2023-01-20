@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 
-from bot.nodes import ConstantArithmeticNode, SumNode, ProductNode, ConstantLogicalNode, LogicParameterNode, AndNode, ArithmeticParameterNode
 from genetic_lab.bot_generation import create_bot
 
 if __name__ == '__main__':
