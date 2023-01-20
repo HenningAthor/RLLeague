@@ -25,7 +25,6 @@ import glob
 import os
 
 import pandas as pd
-from tqdm import tqdm
 
 
 def process_file(file_path):
@@ -92,6 +91,10 @@ def process_file(file_path):
 
 
 if __name__ == '__main__':
+    path = 'recorded_data/downloaded_matches'
+    if not os.path.exists(path):
+        os.makedirs(path)
+
     file_list = []
     file_list.extend(list(glob.glob('recorded_data/out/*.parquet')))
     file_list.extend(list(glob.glob('recorded_data/out2/*.parquet')))
