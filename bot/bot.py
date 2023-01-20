@@ -5,32 +5,34 @@ Implements the bot.
 import os
 import pickle
 import copy
-from typing import Dict
+from typing import Dict, Union
 
 import numpy as np
 
-from bot.nodes import count_nodes, leaf_type_count, bloat_analysis, \
-    count_non_bloat_nodes
+from bot.nodes import count_nodes, leaf_type_count, count_non_bloat_nodes
 from bot.nodes import Node
 
 
 class Bot(object):
-    def __init__(self, bot_id: int, name: str):
+    def __init__(self,
+                 bot_id: int,
+                 name: str) -> None:
         self.bot_id: int = bot_id
         self.name: str = name
 
-        self.steering_root: Node = None
-        self.throttle_root: Node = None
-        self.jump_root: Node = None
-        self.boost_root: Node = None
-        self.handbrake_root: Node = None
+        self.steering_root: Union[Node, None] = None
+        self.throttle_root: Union[Node, None] = None
+        self.jump_root: Union[Node, None] = None
+        self.boost_root: Union[Node, None] = None
+        self.handbrake_root: Union[Node, None] = None
 
         self.creation_variables = {}
 
     def __str__(self):
         return f"{self.name}"
 
-    def eval_steering(self, env):
+    def eval_steering(self,
+                      env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the steering tree.
 
@@ -39,7 +41,8 @@ class Bot(object):
         """
         return self.steering_root.eval(env)
 
-    def eval_throttle(self, env):
+    def eval_throttle(self,
+                      env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the throttle tree.
 
@@ -48,7 +51,8 @@ class Bot(object):
         """
         return self.throttle_root.eval(env)
 
-    def eval_jump(self, env):
+    def eval_jump(self,
+                  env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the jump tree.
 
@@ -57,7 +61,8 @@ class Bot(object):
         """
         return self.jump_root.eval(env)
 
-    def eval_boost(self, env):
+    def eval_boost(self,
+                   env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the boost tree.
 
@@ -66,7 +71,8 @@ class Bot(object):
         """
         return self.boost_root.eval(env)
 
-    def eval_handbrake(self, env):
+    def eval_handbrake(self,
+                       env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the handbrake tree.
 
@@ -75,45 +81,68 @@ class Bot(object):
         """
         return self.handbrake_root.eval(env)
 
-    def eval_all(self, env):
+    def eval_all(self,
+                 env: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> np.ndarray:
         """
         Evaluates all trees and returns the result as numpy array.
 
         :param env: Dict holding values for parameters.
         :return: Array of size 8
         """
-        n = env[list(env.keys())[0]][list(env[list(env.keys())[0]].keys())[0]].shape[0]
+        n = 1
+        # check type of first item, numpy 1D arrays are also accepted
+        node_type = list(env.keys())[0]
+        parameter = list(env[node_type].keys())[0]
+        if type(env[node_type][parameter]) == np.ndarray:
+            n = env[node_type][parameter].shape[0]
+
         res = np.zeros(shape=(n, 8), dtype=float)
-        res[:, 0] = self.eval_throttle(env) < 0.0  # throttle
-        res[:, 1] = self.eval_steering(env) < 0.0  # steer
-        res[:, 2] = 0.0  # pitch
-        res[:, 3] = 0.0  # yaw
-        res[:, 4] = 0.0  # roll
-        res[:, 5] = self.eval_jump(env) < 0.0  # jump
-        res[:, 6] = self.eval_boost(env) < 0.0   # boost
-        res[:, 7] = self.eval_handbrake(env) < 0.0  # handbrake
+        res[:, 0] = self.eval_throttle(env)  # throttle [-1, 0, 1]
+        res[:, 1] = self.eval_steering(env)  # steer [-1, 0, 1]
+        res[:, 2] = 0.0  # pitch [-1, 0, 1]
+        res[:, 3] = 0.0  # yaw [-1, 0, 1]
+        res[:, 4] = 0.0  # roll [-1, 0, 1]
+        res[:, 5] = self.eval_jump(env)  # jump [0, 1]
+        res[:, 6] = self.eval_boost(env)   # boost [0, 1]
+        res[:, 7] = self.eval_handbrake(env)  # handbrake [0, 1]
 
         res[:, 0] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
         res[:, 1] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
 
         return res
 
-    def bloat_analysis(self, env_stats: Dict):
+    def bloat_analysis(self,
+                       env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
         """
-        Analysis both trees for bloat.
+        Analysis all trees for bloat.
 
-        :param env_stats: Dictionary holding statistics for the parameters of
-        the environment.
+        :param env_stats: Statistics for the parameters of the environment.
         :return: None
         """
-        bloat_analysis(self.steering_root, env_stats)
-        bloat_analysis(self.throttle_root, env_stats)
+        self.throttle_root.determine_bloat(env_stats)
+        self.steering_root.determine_bloat(env_stats)
+        self.jump_root.determine_bloat(env_stats)
+        self.boost_root.determine_bloat(env_stats)
+        self.handbrake_root.determine_bloat(env_stats)
 
-    def mutate(self, node_probability: float):
+    def unmark_bloat(self) -> None:
+        """
+        Marks all nodes in the trees as not bloat, resetting the tree.
+
+        :return: None
+        """
+        self.throttle_root.unmark_bloat()
+        self.steering_root.unmark_bloat()
+        self.jump_root.unmark_bloat()
+        self.boost_root.unmark_bloat()
+        self.handbrake_root.unmark_bloat()
+
+    def mutate(self,
+               mutate_probability: float):
         """
         Deep-copies the bot and mutates it. The copy is returned.
 
-        :param node_probability: Probability of each node changing
+        :param mutate_probability: Probability of a mutation in each node
         :return: Mutated copy
         """
         new_bot = copy.deepcopy(self)
@@ -128,7 +157,7 @@ class Bot(object):
         while work_list:
             node = work_list.pop()
 
-            if np.random.uniform(0.0, 1.0) < node_probability:
+            if np.random.uniform(0.0, 1.0) < mutate_probability:
                 # mutate the node
                 node.mutate(self.creation_variables)
 
