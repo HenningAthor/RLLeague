@@ -1546,7 +1546,7 @@ class LogicParameterNode(LogicalNode):
 # available types, nodes and probabilities
 all_types = ['ARITHMETIC', 'LOGIC', 'DECISION', 'NONE']
 all_nodes = {
-    'BRANCH': {'ARITHMETIC': [SumNode, ProductNode, DecisionNode],
+    'BRANCH': {'ARITHMETIC': [SumNode, DecisionNode],
                'LOGIC': [AndNode, OrNode, SmallerNode, SmallerEqualNode,
                          GreaterEqualNode, GreaterNode, EqualNode,
                          NegationNode, IdentityLogicalNode]
@@ -1556,7 +1556,7 @@ all_nodes = {
              }
 }
 all_nodes_p = {
-    'BRANCH': {'ARITHMETIC': [0.4, 0.4, 0.2],
+    'BRANCH': {'ARITHMETIC': [0.8, 0.2],
                'LOGIC': [0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125,
                          0.125, 0.0]
                },
