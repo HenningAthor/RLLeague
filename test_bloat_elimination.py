@@ -74,7 +74,7 @@ if __name__ == '__main__':
         assert np.all(env['ARITHMETIC'][key] <= 1.0)
 
     np.random.seed(0)
-    bot = create_bot(0, 15, 17, env_variables)
+    bot = create_bot(0, 10, 12, env_variables)
     copy_bot = copy.deepcopy(bot)
     t = time.time()
     err = np.sum(np.square((labels - bot.eval_all(env))))
