@@ -6,26 +6,20 @@ The result will be printed in the min_max.csv file and saved in recorded_data.
 The first row are the max values and the second row are the min values.
 The script needs about 4 hours to complete.
 """
-import csv
-
-import glob
 import numpy as np
 from tqdm import tqdm
 
+from recorded_data.data_util import load_all_parquet_paths, load_match
+
 if __name__ == '__main__':
-    file_list = []
-    file_list.extend(list(glob.glob('recorded_data/downloaded_matches/*.csv')))
+    file_list = load_all_parquet_paths()
 
     headers = []
     min_values = []
     max_values = []
 
     for file_path in tqdm(file_list):
-        game_data = np.genfromtxt(file_path, dtype='float32', delimiter=',', skip_header=True)
-        f = open(file_path, 'r')
-        reader = csv.reader(f)
-        file_headers = list(next(reader, None))
-        f.close()
+        game_data, file_headers = load_match(file_path)
 
         # initialize the headers
         if not headers:
