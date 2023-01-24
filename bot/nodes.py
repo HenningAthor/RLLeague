@@ -2,7 +2,7 @@
 Implements the different nodes.
 """
 import random
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Type
 
 import numpy as np
 
@@ -26,7 +26,42 @@ class Node(object):
         self.bloat_max: Union[float, bool, None] = None  # maximum value the node can propagate
         self.bloat_val: Union[int, float, bool] = 0.0  # if the node is bloat, this value will be returned
 
-        self.last_eval = None
+        self.parameter: str = ''
+        self.constant: Union[float, bool] = 0.0
+
+
+    def __copy__(self):
+        """
+        Shallow copy function.
+        """
+        raise NotImplementedError
+
+    def __deepcopy__(self, memodict={}):
+        """
+        Deepcopy function. Deepcopys the children and connects them to this
+        node. The parent is not set.
+        """
+        cls = self.__class__
+        new_node = cls.__new__(cls)
+
+        new_node.type = self.type
+        new_node.children_type = self.children_type
+        new_node.immutable = self.immutable
+        new_node.similar_node_types = self.similar_node_types.copy()
+
+        new_node.num_children = self.num_children
+        new_node.children = [c.__deepcopy__(memodict) for c in self.children]
+        new_node.parent = None  # parent is not set
+
+        new_node.is_bloat = self.is_bloat
+        new_node.bloat_min = self.bloat_min
+        new_node.bloat_max = self.bloat_max
+        new_node.bloat_val = self.bloat_val
+
+        new_node.parameter = self.parameter
+        new_node.constant = self.constant
+
+        pass
 
     def add_child(self,
                   child: 'Node') -> None:
@@ -49,6 +84,19 @@ class Node(object):
         :return: None
         """
         self.children.remove(child)
+
+    def swap_child(self,
+                   old_child: 'Node',
+                   new_child: 'Node') -> None:
+        """
+        Swaps the old child with the new child. Does not change any pointers.
+
+        :param old_child: The child currently in the list.
+        :param new_child: The node that will replace that child.
+        :return: None
+        """
+        idx = self.children.index(old_child)
+        self.children[idx] = new_child
 
     def eval(self,
              environment: Dict[str, Dict[str, Union[float, bool]]]) -> Union[float, bool]:
@@ -121,8 +169,7 @@ class Node(object):
 
         # manage connections with parent
         if self.parent is not None:
-            self.parent.add_child(node)
-            self.parent.remove_child(self)
+            self.parent.swap_child(self, node)
 
         # manage connections with children
         for child in self.children:
@@ -130,6 +177,44 @@ class Node(object):
 
         # delete self
         del self
+
+    def get_all_nodes(self,
+                      node_type: Type['Node']) -> List['Node']:
+        """
+        Gets all nodes in the subtree, with the specified node type.
+
+        :param node_type: The type of node.
+        :return: List of all found nodes.
+        """
+        nodes = []
+        work_list = []
+        work_list.extend(self.children)
+        while work_list:
+            node = work_list.pop()
+
+            if type(node) == node_type:
+                nodes.append(node)
+
+            work_list.extend(node.children)
+
+        return nodes
+
+    def connect_tree(self):
+        """
+        Connects parents and children.
+        """
+        for child in self.children:
+            child.connect_tree()
+
+        for child in self.children:
+            child.parent = self
+
+    def disconnect_tree(self):
+        for child in self.children:
+            child.disconnect_tree()
+
+        for child in self.children:
+            child.parent = None
 
 
 class ArithmeticNode(Node):
@@ -177,19 +262,15 @@ class ArithmeticNode(Node):
 
         # decide for every root if it will be a leaf
         for i in range(self.num_children):
-            if np.random.random_sample() < p:
+            if get_random_sample() < p:
                 # generate a leaf
-                nodes = all_nodes['LEAF']['ARITHMETIC']
-                nodes_p = all_nodes_p['LEAF']['ARITHMETIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('LEAF', 'ARITHMETIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
             else:
                 # generate a branch
-                nodes = all_nodes['BRANCH']['ARITHMETIC']
-                nodes_p = all_nodes_p['BRANCH']['ARITHMETIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('BRANCH', 'ARITHMETIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
@@ -300,19 +381,15 @@ class BinaryLogicalNode(LogicalNode):
 
         # decide for every root if it will be a leaf
         for i in range(self.num_children):
-            if np.random.random_sample() < p:
+            if get_random_sample() < p:
                 # generate a leaf
-                nodes = all_nodes['LEAF']['LOGIC']
-                nodes_p = all_nodes_p['LEAF']['LOGIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('LEAF', 'LOGIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
             else:
                 # generate a branch
-                nodes = all_nodes['BRANCH']['LOGIC']
-                nodes_p = all_nodes_p['BRANCH']['LOGIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('BRANCH', 'LOGIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
@@ -373,19 +450,15 @@ class UnaryLogicalNode(LogicalNode):
 
         # decide for every root if it will be a leaf
         for i in range(self.num_children):
-            if np.random.random_sample() < p:
+            if get_random_sample() < p:
                 # generate a leaf
-                nodes = all_nodes['LEAF']['LOGIC']
-                nodes_p = all_nodes_p['LEAF']['LOGIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('LEAF', 'LOGIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
             else:
                 # generate a branch
-                nodes = all_nodes['BRANCH']['LOGIC']
-                nodes_p = all_nodes_p['BRANCH']['LOGIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('BRANCH', 'LOGIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
@@ -446,19 +519,15 @@ class ComparisonNode(LogicalNode):
 
         # decide for every root if it will be a leaf
         for i in range(self.num_children):
-            if np.random.random_sample() < p:
+            if get_random_sample() < p:
                 # generate a leaf
-                nodes = all_nodes['LEAF']['ARITHMETIC']
-                nodes_p = all_nodes_p['LEAF']['ARITHMETIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('LEAF', 'ARITHMETIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
             else:
                 # generate a branch
-                nodes = all_nodes['BRANCH']['ARITHMETIC']
-                nodes_p = all_nodes_p['BRANCH']['ARITHMETIC']
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('BRANCH', 'ARITHMETIC')
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
@@ -1231,19 +1300,15 @@ class DecisionNode(ArithmeticNode):
         # decide for every node if it will be a leaf
         node_types = ['LOGIC', 'ARITHMETIC', 'ARITHMETIC']
         for i in range(3):
-            if np.random.random_sample() < p:
+            if get_random_sample() < p:
                 # generate a leaf
-                nodes = all_nodes['LEAF'][node_types[i]]
-                nodes_p = all_nodes_p['LEAF'][node_types[i]]
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('LEAF', node_types[i])
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
             else:
                 # generate a branch
-                nodes = all_nodes['BRANCH'][node_types[i]]
-                nodes_p = all_nodes_p['BRANCH'][node_types[i]]
-                node_type = np.random.choice(nodes, p=nodes_p)
+                node_type = get_random_node('BRANCH', node_types[i])
                 node = node_type()
                 node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
                 self.add_child(node)
@@ -1316,7 +1381,7 @@ class ConstantArithmeticNode(ArithmeticNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.constant = np.random.random_sample()
+        self.constant = get_random_sample()
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1450,7 +1515,7 @@ class ArithmeticParameterNode(ArithmeticNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = np.random.choice(env_vars['ARITHMETIC'])
+        self.parameter = random.choice(env_vars['ARITHMETIC'])
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1473,7 +1538,7 @@ class ArithmeticParameterNode(ArithmeticNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = np.random.choice(env_vars['ARITHMETIC'])
+        self.parameter = random.choice(env_vars['ARITHMETIC'])
 
 
 class LogicParameterNode(LogicalNode):
@@ -1517,7 +1582,7 @@ class LogicParameterNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = np.random.choice(env_vars['LOGIC'])
+        self.parameter = random.choice(env_vars['LOGIC'])
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1540,34 +1605,72 @@ class LogicParameterNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = np.random.choice(env_vars['LOGIC'])
+        self.parameter = random.choice(env_vars['LOGIC'])
 
 
 # available types, nodes and probabilities
 all_types = ['ARITHMETIC', 'LOGIC', 'DECISION', 'NONE']
+all_branch_nodes = np.array([SumNode, DecisionNode, AndNode, OrNode, SmallerNode, SmallerEqualNode,
+                             GreaterEqualNode, GreaterNode, EqualNode,
+                             NegationNode, IdentityLogicalNode])
 all_nodes = {
-    'BRANCH': {'ARITHMETIC': [SumNode, DecisionNode],
-               'LOGIC': [AndNode, OrNode, SmallerNode, SmallerEqualNode,
-                         GreaterEqualNode, GreaterNode, EqualNode,
-                         NegationNode, IdentityLogicalNode]
+    'BRANCH': {'ARITHMETIC': np.array([SumNode, DecisionNode]),
+               'LOGIC': np.array([AndNode, OrNode, SmallerNode, SmallerEqualNode,
+                                  GreaterEqualNode, GreaterNode, EqualNode,
+                                  NegationNode, IdentityLogicalNode])
                },
-    'LEAF': {'ARITHMETIC': [ConstantArithmeticNode, ArithmeticParameterNode],
-             'LOGIC': [ConstantLogicalNode, LogicParameterNode]
+    'LEAF': {'ARITHMETIC': np.array([ConstantArithmeticNode, ArithmeticParameterNode]),
+             'LOGIC': np.array([ConstantLogicalNode, LogicParameterNode])
              }
 }
 all_nodes_p = {
-    'BRANCH': {'ARITHMETIC': [0.8, 0.2],
-               'LOGIC': [0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125,
-                         0.125, 0.0]
+    'BRANCH': {'ARITHMETIC': np.array([0.8, 0.2]),
+               'LOGIC': np.array([0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125,
+                                  0.125, 0.0])
                },
-    'LEAF': {'ARITHMETIC': [0.1, 0.9],
-             'LOGIC': [0.1, 0.9]
+    'LEAF': {'ARITHMETIC': np.array([0.1, 0.9]),
+             'LOGIC': np.array([0.1, 0.9])
              }
 }
 
 """
 Operations on nodes.
 """
+
+# for faster random node generation
+random_nodes = {'BRANCH': {'ARITHMETIC': [], 'LOGIC': []},
+                'LEAF': {'ARITHMETIC': [], 'LOGIC': []}}
+
+
+def get_random_node(branch_type: str,
+                    node_type: str) -> Type['Node']:
+    """
+    Function to quickly get a random node from all nodes.
+
+    :param branch_type: Either 'BRANCH' or 'LEAF'
+    :param node_type: Either 'ARITHMETIC' or 'LOGIC'
+    :return: A node type
+    """
+    # if our list is empty, generate new samples
+    if not random_nodes[branch_type][node_type]:
+        random_nodes[branch_type][node_type] = random.choices(all_nodes[branch_type][node_type], weights=all_nodes_p[branch_type][node_type], k=10000)
+
+    return random_nodes[branch_type][node_type].pop()
+
+
+random_numbers = {0: np.random.sample(size=10000).tolist()}
+
+
+def get_random_sample():
+    """
+    Function to quickly generate a new sample between [0, 1].
+
+    :return: Sample between [0, 1]
+    """
+    if not random_numbers[0]:
+        random_numbers[0] = np.random.sample(size=10000).tolist()
+
+    return random_numbers[0].pop()
 
 
 def count_nodes(root: Node) -> int:
@@ -1624,3 +1727,28 @@ def leaf_type_count(root: Node) -> Dict[str, int]:
         else:
             node_list.extend(node.children)
     return par_count
+
+
+def recombine_nodes(node_1: Node, node_2: Node) -> None:
+    """
+    Node 1 and Node 2 are in different trees. This function will swap both nodes
+    in their respective tree. It will also connect the parents.
+    Only nodes with the same type can be swapped.
+
+    :param node_1: Node 1 in tree a.
+    :param node_2: Node 2 in tree b.
+    :return: None
+    """
+    assert type(node_1) == type(node_2)
+
+    # get parents
+    node_1_parent = node_1.parent
+    node_2_parent = node_2.parent
+
+    # swap the nodes
+    node_1_parent.swap_child(node_1, node_2)
+    node_2_parent.swap_child(node_2, node_1)
+
+    # connect parents
+    node_1.parent = node_2_parent
+    node_2.parent = node_1_parent
