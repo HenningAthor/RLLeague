@@ -1,15 +1,15 @@
 """
 Implements the bot.
 """
-
 import os
 import pickle
-import copy
-from typing import Dict, Union
+import _pickle as cPickle
+import random
+from typing import Dict, Union, Tuple
 
 import numpy as np
 
-from bot.nodes import count_nodes, leaf_type_count, count_non_bloat_nodes
+from bot.nodes import count_nodes, leaf_type_count, count_non_bloat_nodes, all_branch_nodes, recombine_nodes
 from bot.nodes import Node
 
 
@@ -31,55 +31,96 @@ class Bot(object):
     def __str__(self):
         return f"{self.name}"
 
+    def connect_trees(self):
+        """
+        Connects all trees.
+        """
+        self.throttle_root.connect_tree()
+        self.steering_root.connect_tree()
+        self.jump_root.connect_tree()
+        self.boost_root.connect_tree()
+        self.handbrake_root.connect_tree()
+
+    def disconnect_trees(self):
+        """
+        Connects all trees.
+        """
+        self.throttle_root.disconnect_tree()
+        self.steering_root.disconnect_tree()
+        self.jump_root.disconnect_tree()
+        self.boost_root.disconnect_tree()
+        self.handbrake_root.disconnect_tree()
+
     def eval_steering(self,
                       env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
         Evaluates the steering tree.
 
         :param env: Dict holding values for parameters.
-        :return: Float between [-1.0, 1.0]
+        :return: Float between [-1.0, 1.0] or float in {-1, 0, 1}
         """
-        return self.steering_root.eval(env)
+        res = self.steering_root.eval(env)
+        # res = self.sigmoid(res)
+        res = self.scale(res, self.steering_root.bloat_min, self.steering_root.bloat_max, -1, 1)
+        res = self.round_1_0_1(res)
+        return res
 
     def eval_throttle(self,
                       env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
-        Evaluates the throttle tree.
+        Evaluates the throttle tree. "1.0" means accelerate, "0.0" means neutral
+        and "-1.0" means decelerate.
 
         :param env: Dict holding values for parameters.
-        :return: Float between [-1.0, 1.0]
+        :return: Float between [-1.0, 1.0] or float in {-1, 0, 1}
         """
-        return self.throttle_root.eval(env)
+        res = self.throttle_root.eval(env)
+        # res = self.sigmoid(res)
+        res = self.scale(res, self.throttle_root.bloat_min, self.throttle_root.bloat_max, -1, 1)
+        res = self.round_1_0_1(res)
+        return res
 
     def eval_jump(self,
                   env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
-        Evaluates the jump tree.
+        Evaluates the jump tree. "1" means jump, "0" means don't jump.
 
         :param env: Dict holding values for parameters.
-        :return: Bool if to jump or not.
+        :return: Float in {0, 1}
         """
-        return self.jump_root.eval(env)
+        res = self.jump_root.eval(env)
+        # res = self.sigmoid(res)
+        res = self.scale(res, self.jump_root.bloat_min, self.jump_root.bloat_max, 0, 1)
+        res = self.round_0_1(res)
+        return res
 
     def eval_boost(self,
                    env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
-        Evaluates the boost tree.
+        Evaluates the boost tree. "1" means boost, "0" means don't boost.
 
         :param env: Dict holding values for parameters.
-        :return: Bool if to boost or not.
+        :return: Float in {0, 1}
         """
-        return self.boost_root.eval(env)
+        res = self.boost_root.eval(env)
+        # res = self.sigmoid(res)
+        res = self.scale(res, self.boost_root.bloat_min, self.boost_root.bloat_max, 0, 1)
+        res = self.round_0_1(res)
+        return res
 
     def eval_handbrake(self,
                        env: Dict[str, Dict[str, Union[float, bool]]]) -> float:
         """
-        Evaluates the handbrake tree.
+        Evaluates the handbrake tree. "1" means handbrake, "0" means no handbrake.
 
         :param env: Dict holding values for parameters.
-        :return: Bool if to use the handbrake or not.
+        :return: Float in {0, 1}
         """
-        return self.handbrake_root.eval(env)
+        res = self.handbrake_root.eval(env)
+        # res = self.sigmoid(res)
+        res = self.scale(res, self.handbrake_root.bloat_min, self.handbrake_root.bloat_max, 0, 1)
+        res = self.round_0_1(res)
+        return res
 
     def eval_all(self,
                  env: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> np.ndarray:
@@ -106,10 +147,72 @@ class Bot(object):
         res[:, 6] = self.eval_boost(env)   # boost [0, 1]
         res[:, 7] = self.eval_handbrake(env)  # handbrake [0, 1]
 
-        res[:, 0] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
-        res[:, 1] = np.where(res[:, 0] == 0.0, -1.0, res[:, 0])
-
         return res
+
+    @staticmethod
+    def sigmoid(x: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Applies the sigmoid function on x.
+
+        :param x: A scalar or np.ndarray
+        """
+        return 1 / (1 + np.exp(-x * (1/1000000)))
+
+    @staticmethod
+    def scale(x: Union[float, np.ndarray],
+              x_min: float,
+              x_max: float,
+              a: float,
+              b: float) -> Union[float, np.ndarray]:
+        """
+        Scales x to lie in the interval [a, b].
+
+        :param x: The number.
+        :param x_min: Minimum value x can take.
+        :param x_max: Maximum value x can take.
+        :param a: Lower bound of the interval.
+        :param b: Upper bound of the interval.
+        :return: x scaled to the interval.
+        """
+        return ((x - x_min) / (x_max - x_min)) * (b - a) + a
+
+    @staticmethod
+    def round_1_0_1(x: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Rounds x (x in [-1, 1]) to -1, 0 or 1.
+
+        :param x: A number.
+        :return: -1, 0, or 1
+        """
+        if isinstance(x, np.ndarray):
+            first_part = (-1.0 <= x) & (x < -1/3)
+            second_part = (-1/3 <= x) & (x < 1/3)
+            third_part = ~first_part & ~second_part
+
+            return (first_part * -1.0) + (second_part * 0.0) + (third_part * 1.0)
+        else:
+            if -1.0 <= x < -1/3:
+                return -1.0
+            elif -1/3 <= x < 1/3:
+                return 0.0
+            else:
+                return 1.0
+
+    @staticmethod
+    def round_0_1(x: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Round x (x in [0, 1]) to 0 or 1.
+
+        :param x: A number.
+        :return: 0 or 1
+        """
+        if isinstance(x, np.ndarray):
+            first_part = (0.0 <= x) & (x < 1/2)
+            second_part = ~first_part
+
+            return (first_part * 0.0) + (second_part * 1.0)
+        else:
+            return round(x)
 
     def bloat_analysis(self,
                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -142,10 +245,10 @@ class Bot(object):
         """
         Deep-copies the bot and mutates it. The copy is returned.
 
-        :param mutate_probability: Probability of a mutation in each node
+        :param mutate_probability: Probability of a mutation in each node.
         :return: Mutated copy
         """
-        new_bot = copy.deepcopy(self)
+        new_bot = cPickle.loads(cPickle.dumps(self, -1))  # copy.deepcopy(self)
 
         work_list = []
         work_list.extend(new_bot.throttle_root.children)
@@ -536,3 +639,38 @@ class Bot(object):
         content += f"goal_explosion_paint_id = 0\n"
 
         return content
+
+
+def recombine_bots(bot_1: Bot, bot_2: Bot, tree_probability: float) -> Tuple['Bot', 'Bot']:
+    """
+    Recombines both bots. Will copy the bots and swap two subtrees.
+
+    :param bot_1: Bot 1.
+    :param bot_2: Bot 2.
+    :param tree_probability: Probability that a tree will change.
+    :return: None
+    """
+    bot_1 = cPickle.loads(cPickle.dumps(bot_1, -1))  # copy.deepcopy(self)
+    bot_2 = cPickle.loads(cPickle.dumps(bot_2, -1))  # copy.deepcopy(self)
+
+    bot_1_roots = [bot_1.throttle_root, bot_1.steering_root, bot_1.jump_root, bot_1.boost_root, bot_1.handbrake_root]
+    bot_2_roots = [bot_2.throttle_root, bot_2.steering_root, bot_2.jump_root, bot_2.boost_root, bot_2.handbrake_root]
+
+    for root_1, root_2 in zip(bot_1_roots, bot_2_roots):
+        if np.random.sample() < tree_probability:
+            # choose uniformly which node type we will swap
+            node_type = random.choice(all_branch_nodes)
+
+            tree_1_nodes = root_1.get_all_nodes(node_type)
+            tree_2_nodes = root_2.get_all_nodes(node_type)
+
+            if tree_1_nodes and tree_2_nodes:
+                # choose two nodes uniformly
+                node_1 = random.choice(tree_1_nodes)
+                node_2 = random.choice(tree_2_nodes)
+
+                assert type(node_1) == type(node_2) == node_type
+
+                recombine_nodes(node_1, node_2)
+
+    return bot_1, bot_2
