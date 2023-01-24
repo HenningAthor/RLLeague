@@ -1,35 +1,24 @@
 import copy
-import csv
 import time
 
 import numpy as np
 
 from genetic_lab.bot_generation import create_bot
+from recorded_data.data_util import load_min_max_csv, load_match, scale_with_min_max, split_data
 
 if __name__ == '__main__':
     # load the game data
-    csv_file_path = 'recorded_data/downloaded_matches/a11526b4-ea11-4214-bdb2-804bdcf531ee.csv'
-    game_data = np.genfromtxt(csv_file_path, dtype='float64', delimiter=',', skip_header=True)[0:1, :]
-    f = open(csv_file_path, 'r')
-    reader = csv.reader(f)
-    features_header = list(next(reader, None))
-    f.close()
+    game_data, headers = load_match(f'recorded_data/out/a7303c84-7d9e-472d-aa60-403388827a41.parquet')
+    game_data = game_data[0:2, :]
 
-    # split data into features and labels
-    temp = np.split(game_data, [len(features_header) - 16], axis=1)
-    features = temp[0]
-    s = np.split(temp[1], [8], axis=1)
-    labels = s[0]
-    features_header = features_header[:-16]
-    labels_header = features_header[-16:-8]
+    # load min-max data
+    min_max_data, min_max_headers = load_min_max_csv()
 
-    # load the min-max data
-    csv_file_path = 'recorded_data/min_max.csv'
-    min_max_data = np.genfromtxt(csv_file_path, dtype='float32', delimiter=',', skip_header=True)
-    f = open(csv_file_path, 'r')
-    reader = csv.reader(f)
-    headers = list(next(reader, None))
-    f.close()
+    # normalize game data
+    game_data = scale_with_min_max(game_data, headers, min_max_data, min_max_headers)
+
+    # split the data
+    features, player1, player2, features_header, player1_header, player2_header = split_data(game_data, headers)
 
     env_variables = {'ARITHMETIC': ['inverted_ball/pos_x',
                                     'inverted_ball/pos_y',
@@ -37,12 +26,12 @@ if __name__ == '__main__':
                                     'inverted_ball/vel_x',
                                     'inverted_ball/vel_y',
                                     'inverted_ball/vel_z',
-                                    'inverted_player1/pos_x',
-                                    'inverted_player1/pos_y',
-                                    'inverted_player1/pos_z',
-                                    'inverted_player1/vel_x',
-                                    'inverted_player1/vel_y',
-                                    'inverted_player1/vel_z',
+                                    'player1/pos_x',
+                                    'player1/pos_y',
+                                    'player1/pos_z',
+                                    'player1/vel_x',
+                                    'player1/vel_y',
+                                    'player1/vel_z',
                                     'inverted_player2/pos_x',
                                     'inverted_player2/pos_y',
                                     'inverted_player2/pos_z',
@@ -53,43 +42,38 @@ if __name__ == '__main__':
                                'TRUE']
                      }
 
-    # Fill it with index of the feature
-    env_index = {'ARITHMETIC': {}, 'LOGIC': {}}
+    # fill environment stats
+    env_stats = {'ARITHMETIC': dict(),
+                 'LOGIC':
+                     {'FALSE': {'min': False, 'max': False},
+                      'TRUE': {'min': True, 'max': True}
+                      }
+                 }
     for key in env_variables['ARITHMETIC']:
-        idx = features_header.index(key)
-        env_index['ARITHMETIC'][key] = idx
-
-    env = {'ARITHMETIC': {}, 'LOGIC': {'FALSE': False, 'TRUE': True}}
-    env_stats = {'ARITHMETIC': {}, 'LOGIC': {'FALSE': {'min': False, 'max': False}, 'TRUE': {'min': True, 'max': True}}}
-    for key in env_variables['ARITHMETIC']:
-        env['ARITHMETIC'][key] = features[:, env_index['ARITHMETIC'][key]]
         env_stats['ARITHMETIC'][key] = {'min': 0.0, 'max': 1.0}
 
-    # scale environment to [0.0, 1.0]
+    # fill the environment
+    env = {'ARITHMETIC': {}, 'LOGIC': {'FALSE': False, 'TRUE': True}}
     for key in env_variables['ARITHMETIC']:
-        idx = env_index['ARITHMETIC'][key]
-        env['ARITHMETIC'][key] = (env['ARITHMETIC'][key] - min_max_data[1][idx]) / (min_max_data[0][idx] - min_max_data[1][idx])
-
-        assert np.all(env['ARITHMETIC'][key] >= 0.0)
-        assert np.all(env['ARITHMETIC'][key] <= 1.0)
+        env['ARITHMETIC'][key] = features[:, features_header.index(key)]
 
     np.random.seed(0)
     bot = create_bot(0, 10, 12, env_variables)
     copy_bot = copy.deepcopy(bot)
     t = time.time()
-    err = np.sum(np.square((labels - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - bot.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
     bot.bloat_analysis(env_stats)
     t = time.time()
-    err = np.sum(np.square((labels - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - bot.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
     bot.unmark_bloat()
     t = time.time()
-    err = np.sum(np.square((labels - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - bot.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
