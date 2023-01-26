@@ -1,6 +1,6 @@
 import os.path
 
-from genetic_lab.bot_generation import create_bot
+from agent.agent import Agent
 from league.league import League
 from league.reward_functions import league_reward_functions
 from league.season_manager import SeasonManager
@@ -39,9 +39,9 @@ if __name__ == '__main__':
 
     for i in range(5):
         if not os.path.exists(f"bot_storage/bot_{i}"):
-            bot = create_bot(i, 5, 10, env_variables)
-            print(bot.info())
-            bot.prepare_for_rlbot()
+            agent = Agent(i, '', 5, 10, env_variables)
+            print(agent.info())
+            agent.prepare_for_rlbot()
         league_1.add_agent(i)
         league_2.add_agent(i)
 

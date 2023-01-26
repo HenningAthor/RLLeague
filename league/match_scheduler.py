@@ -245,7 +245,7 @@ class RLLeagueAction(ContinuousAction):
         """
         path = f"game_reports/"
         if self.initialized:
-            file_name = f"game_reports/{self.league_id}_{self.agent_1.bot_id}_{self.agent_2.bot_id}.txt"
+            file_name = f"game_reports/{self.league_id}_{self.agent_1.agent_id}_{self.agent_2.agent_id}.txt"
 
             if not os.path.exists(path):
                 os.makedirs(path)
@@ -256,7 +256,7 @@ class RLLeagueAction(ContinuousAction):
             self.rew_1 = 0.0
             self.rew_2 = 0.0
 
-            if self.verbose: print(f"RLLeagueAction {self.action_id}: Writing game report for agent {self.agent_1.bot_id} and {self.agent_2.bot_id} in league {self.league_id}")
+            if self.verbose: print(f"RLLeagueAction {self.action_id}: Writing game report for agent {self.agent_1.agent_id} and {self.agent_2.agent_id} in league {self.league_id}")
         else:
             if self.verbose: print(f"RLLeagueAction {self.action_id}: Not initialized, no game report written!")
 

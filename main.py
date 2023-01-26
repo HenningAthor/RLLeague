@@ -1,4 +1,4 @@
-from genetic_lab.bot_generation import create_bot
+from agent.agent import Agent
 
 if __name__ == '__main__':
     env_variables = {'ARITHMETIC': ['my_car_x',
@@ -28,15 +28,15 @@ if __name__ == '__main__':
                                     'ball_rotation_roll'],
                      'LOGIC': ['kickoff']}
 
-    bot = create_bot(0, 5, 10, env_variables)
-    print(bot.info())
-    bot.prepare_for_rlbot()
-    bot = create_bot(1, 5, 10, env_variables)
-    print(bot.info())
-    bot.prepare_for_rlbot()
-    bot = create_bot(2, 5, 10, env_variables)
-    print(bot.info())
-    bot.prepare_for_rlbot()
-    bot = create_bot(3, 5, 10, env_variables)
-    print(bot.info())
-    bot.prepare_for_rlbot()
+    agent = Agent(0, '', 5, 10, env_variables)
+    print(agent.info())
+    agent.prepare_for_rlbot()
+    agent = Agent(1, '', 5, 10, env_variables)
+    print(agent.info())
+    agent.prepare_for_rlbot()
+    agent = Agent(2, '', 5, 10, env_variables)
+    print(agent.info())
+    agent.prepare_for_rlbot()
+    agent = Agent(3, '', 5, 10, env_variables)
+    print(agent.info())
+    agent.prepare_for_rlbot()

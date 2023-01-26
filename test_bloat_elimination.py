@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 
-from genetic_lab.bot_generation import create_bot
+from agent.agent import Agent
 from recorded_data.data_util import load_min_max_csv, load_match, scale_with_min_max, split_data
 
 if __name__ == '__main__':
@@ -58,28 +58,28 @@ if __name__ == '__main__':
         env['ARITHMETIC'][key] = features[:, features_header.index(key)]
 
     np.random.seed(0)
-    bot = create_bot(0, 10, 12, env_variables)
-    copy_bot = copy.deepcopy(bot)
+    agent = Agent(0, '', 10, 12, env_variables)
+    copy_agent = copy.deepcopy(agent)
     t = time.time()
-    err = np.sum(np.square((player1 - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - agent.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
-    bot.bloat_analysis(env_stats)
+    agent.bloat_analysis(env_stats)
     t = time.time()
-    err = np.sum(np.square((player1 - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - agent.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
-    bot.unmark_bloat()
+    agent.unmark_bloat()
     t = time.time()
-    err = np.sum(np.square((player1 - bot.eval_all(env))))
+    err = np.sum(np.square((player1 - agent.eval_all(env))))
     t = time.time() - t
     print(err, t)
 
-    copy_bot.bloat_analysis(env_stats)
-    work_list_1 = [bot.steering_root]
-    work_list_2 = [copy_bot.steering_root]
+    copy_agent.bloat_analysis(env_stats)
+    work_list_1 = [agent.steering_root]
+    work_list_2 = [copy_agent.steering_root]
 
     save_list_1 = []
     save_list_2 = []

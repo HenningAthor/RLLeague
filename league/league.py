@@ -8,7 +8,7 @@ class League(object):
         """
         Initializes the league.
         Makes sure that all needed agents for the league are present, if bots
-        are missing (there is no agent in bot_storage) a new bot will be
+        are missing (there is no agent in agent_storage) a new agent will be
         generated.
 
         :param league_id: Id of the league. Lower ids are leagues with less complex reward functions.
