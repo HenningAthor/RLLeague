@@ -372,7 +372,7 @@ def velocity_ball_step_reward(agent_idx: int, state: GameState, state_history: L
     :param agent_idx: The index of the agent in state.
     :param state: The state of the game.
     :param state_history: (optional) The previous states of the game.
-    :return: float
+    :return: reward of 1 is enemy player demoed, else 0
     """
 
     return np.linalg.norm(state.ball.linear_velocity) / BALL_MAX_SPEED
