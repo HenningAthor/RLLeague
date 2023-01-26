@@ -5,53 +5,41 @@ import random
 from typing import List, Dict, Union, Type
 
 import numpy as np
+from numba import njit
+
+from agent.util import random_sample
 
 
 class Node(object):
     def __init__(self):
-        # properties
-        self.type: str = "UNINITIALIZED"
-        self.children_type: str = "UNINITIALIZED"
-        self.immutable: bool = False
-        self.similar_node_types: List = []  # holds all similar Node types
-
         # relationship
-        self.num_children: int = 0
         self.children: List['Node'] = []
         self.parent: Union['Node', None] = None
 
         # values needed for bloat elimination
         self.is_bloat: bool = False  # indicates if this is a bloat node
-        self.bloat_min: Union[float, bool, None] = None  # minimum value the node can propagate
-        self.bloat_max: Union[float, bool, None] = None  # maximum value the node can propagate
-        self.bloat_val: Union[int, float, bool] = 0.0  # if the node is bloat, this value will be returned
+        self.bloat_min: Union[float, bool] = 0.0  # minimum value the node can propagate
+        self.bloat_max: Union[float, bool] = 0.0  # maximum value the node can propagate
+        self.bloat_val: Union[float, bool] = 0.0  # if the node is bloat, this value will be returned
 
         self.parameter: str = ''
         self.constant: Union[float, bool] = 0.0
 
-
-    def __copy__(self):
-        """
-        Shallow copy function.
-        """
-        raise NotImplementedError
-
     def __deepcopy__(self, memodict={}):
         """
-        Deepcopy function. Deepcopys the children and connects them to this
+        Deepcopy function. Deep-copies the children and connects them to this
         node. The parent is not set.
+
+        :param memodict: Dictionary to save already seen variables.
+        :return: Deepcopy of the node.
         """
         cls = self.__class__
         new_node = cls.__new__(cls)
 
-        new_node.type = self.type
-        new_node.children_type = self.children_type
-        new_node.immutable = self.immutable
-        new_node.similar_node_types = self.similar_node_types.copy()
-
-        new_node.num_children = self.num_children
         new_node.children = [c.__deepcopy__(memodict) for c in self.children]
         new_node.parent = None  # parent is not set
+        for child in new_node.children:
+            child.parent = new_node
 
         new_node.is_bloat = self.is_bloat
         new_node.bloat_min = self.bloat_min
@@ -61,50 +49,70 @@ class Node(object):
         new_node.parameter = self.parameter
         new_node.constant = self.constant
 
-        pass
+        return new_node
 
     def add_child(self,
                   child: 'Node') -> None:
         """
-        Add the child to the list of children.
-        Increments the number of children.
+        Add the child to the list of children. Creates two-way connection
+        between parent and child.
 
-        :param child: Another node.
+        :param child: A node.
         :return: None
         """
         self.children.append(child)
+        child.parent = self
 
     def remove_child(self,
                      child: 'Node') -> None:
         """
-        Remove the child of the list of children.
-        Decrements the number of children.
+        Remove the child of the list of children. Removes the two-way connection
+        between parent and child.
 
-        :param child: Another root.
+        :param child: A node.
         :return: None
         """
         self.children.remove(child)
+        child.parent = None
 
-    def swap_child(self,
-                   old_child: 'Node',
-                   new_child: 'Node') -> None:
+    def assert_node(self) -> None:
         """
-        Swaps the old child with the new child. Does not change any pointers.
+        Function to assert that the node is correct.
 
-        :param old_child: The child currently in the list.
-        :param new_child: The node that will replace that child.
         :return: None
         """
-        idx = self.children.index(old_child)
-        self.children[idx] = new_child
+        # assert that all children are correct
+        for child in self.children:
+            child.assert_node()
+
+        # assert number of children correct
+        assert all_nodes_info[type(self)]['expected_num_children'] == len(self.children)
+
+        # assert that own variables are correct
+        self.assert_self()
+
+        # assert that all connections are correct
+        for child in self.children:
+            assert child.parent == self
+
+        if self.parent is not None:
+            assert self in self.parent.children
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> Union[float, bool]:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[float, bool, np.ndarray]:
         """
         Evaluates the node.
 
         :param environment: Dictionary holding values for parameters.
-        :return: Float or Bool
+        :return: Float, Bool or array
         """
         raise NotImplementedError
 
@@ -140,7 +148,7 @@ class Node(object):
 
     def unmark_bloat(self) -> None:
         """
-        Marks all nodes in the tree as not bloat, resetting the subtree.
+        Marks all nodes in the tree as non-bloat, resetting the subtree.
 
         :return: None
         """
@@ -158,63 +166,25 @@ class Node(object):
         :return: None
         """
         # possible new types
-        node_types = self.similar_node_types.copy()
-        node_types.remove(self.__class__)
-
-        new_node_type = random.choice(node_types)
+        new_node_type = random.choice(all_nodes_info[type(self)]['similar_nodes'])
 
         node = new_node_type()
         node.parent = self.parent
         node.children = self.children
 
         # manage connections with parent
-        if self.parent is not None:
-            self.parent.swap_child(self, node)
-
-        # manage connections with children
-        for child in self.children:
-            child.parent = node
+        swap_nodes(self, node)
 
         # delete self
         del self
 
-    def get_all_nodes(self,
-                      node_type: Type['Node']) -> List['Node']:
+    def python_npy_jit(self) -> str:
         """
-        Gets all nodes in the subtree, with the specified node type.
+        Writes python code in a string, so it can be compiled.
 
-        :param node_type: The type of node.
-        :return: List of all found nodes.
+        :return: Python code as a string.
         """
-        nodes = []
-        work_list = []
-        work_list.extend(self.children)
-        while work_list:
-            node = work_list.pop()
-
-            if type(node) == node_type:
-                nodes.append(node)
-
-            work_list.extend(node.children)
-
-        return nodes
-
-    def connect_tree(self):
-        """
-        Connects parents and children.
-        """
-        for child in self.children:
-            child.connect_tree()
-
-        for child in self.children:
-            child.parent = self
-
-    def disconnect_tree(self):
-        for child in self.children:
-            child.disconnect_tree()
-
-        for child in self.children:
-            child.parent = None
+        raise NotImplementedError
 
 
 class ArithmeticNode(Node):
@@ -225,13 +195,17 @@ class ArithmeticNode(Node):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
-        self.similar_node_types = [SumNode, ProductNode]
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> [float, np.ndarray]:
         """
         Evaluates the node.
 
@@ -246,7 +220,7 @@ class ArithmeticNode(Node):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -256,24 +230,23 @@ class ArithmeticNode(Node):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        # determine the probability that a leaf root occurs
+        # determine the p that a leaf node occurs
         incr = 1.0 / (max_depth - min_depth)
         p = 0.0 if depth < min_depth else incr * (depth - min_depth)
 
-        # decide for every root if it will be a leaf
-        for i in range(self.num_children):
-            if get_random_sample() < p:
+        # decide for every node if it will be a leaf
+        n_children = all_nodes_info[type(self)]['expected_num_children']
+        for i in range(n_children):
+            if random_sample() < p:
                 # generate a leaf
                 node_type = get_random_node('LEAF', 'ARITHMETIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
             else:
                 # generate a branch
                 node_type = get_random_node('BRANCH', 'ARITHMETIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
+
+            node = node_type()
+            node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
+            self.add_child(node)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -282,6 +255,14 @@ class ArithmeticNode(Node):
 
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
+        """
+        raise NotImplementedError
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
         """
         raise NotImplementedError
 
@@ -294,11 +275,17 @@ class LogicalNode(Node):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Evaluates the node.
 
@@ -313,7 +300,7 @@ class LogicalNode(Node):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -332,6 +319,14 @@ class LogicalNode(Node):
 
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
+        """
+        raise NotImplementedError
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
         """
         raise NotImplementedError
 
@@ -344,13 +339,17 @@ class BinaryLogicalNode(LogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 2
-        self.similar_node_types = [AndNode, OrNode]
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Evaluates the node.
 
@@ -365,7 +364,7 @@ class BinaryLogicalNode(LogicalNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -375,24 +374,23 @@ class BinaryLogicalNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        # determine the probability that a leaf root occurs
+        # determine the p that a leaf node occurs
         incr = 1.0 / (max_depth - min_depth)
         p = 0.0 if depth < min_depth else incr * (depth - min_depth)
 
-        # decide for every root if it will be a leaf
-        for i in range(self.num_children):
-            if get_random_sample() < p:
+        # decide for every node if it will be a leaf
+        n_children = all_nodes_info[type(self)]['expected_num_children']
+        for i in range(n_children):
+            if random_sample() < p:
                 # generate a leaf
                 node_type = get_random_node('LEAF', 'LOGIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
             else:
                 # generate a branch
                 node_type = get_random_node('BRANCH', 'LOGIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
+
+            node = node_type()
+            node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
+            self.add_child(node)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -401,6 +399,14 @@ class BinaryLogicalNode(LogicalNode):
 
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
+        """
+        raise NotImplementedError
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
         """
         raise NotImplementedError
 
@@ -411,15 +417,19 @@ class UnaryLogicalNode(LogicalNode):
     LOGIC, and it evaluates to a LOGIC value.
     """
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
+
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 1
-        self.similar_node_types = [NegationNode, IdentityLogicalNode]
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Evaluates the node.
 
@@ -434,7 +444,7 @@ class UnaryLogicalNode(LogicalNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -444,24 +454,23 @@ class UnaryLogicalNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        # determine the probability that a leaf root occurs
+        # determine the p that a leaf node occurs
         incr = 1.0 / (max_depth - min_depth)
         p = 0.0 if depth < min_depth else incr * (depth - min_depth)
 
-        # decide for every root if it will be a leaf
-        for i in range(self.num_children):
-            if get_random_sample() < p:
+        # decide for every node if it will be a leaf
+        n_children = all_nodes_info[type(self)]['expected_num_children']
+        for i in range(n_children):
+            if random_sample() < p:
                 # generate a leaf
                 node_type = get_random_node('LEAF', 'LOGIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
             else:
                 # generate a branch
                 node_type = get_random_node('BRANCH', 'LOGIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
+
+            node = node_type()
+            node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
+            self.add_child(node)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -470,6 +479,14 @@ class UnaryLogicalNode(LogicalNode):
 
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
+        """
+        raise NotImplementedError
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
         """
         raise NotImplementedError
 
@@ -480,15 +497,19 @@ class ComparisonNode(LogicalNode):
     ,and it evaluates to a LOGIC value.
     """
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        raise NotImplementedError
+
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
-        self.similar_node_types = [SmallerNode, SmallerEqualNode, EqualNode, GreaterEqualNode, GreaterNode]
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Evaluates the node.
 
@@ -503,7 +524,7 @@ class ComparisonNode(LogicalNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -513,24 +534,23 @@ class ComparisonNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        # determine the probability that a leaf root occurs
+        # determine the p that a leaf node occurs
         incr = 1.0 / (max_depth - min_depth)
         p = 0.0 if depth < min_depth else incr * (depth - min_depth)
 
-        # decide for every root if it will be a leaf
-        for i in range(self.num_children):
-            if get_random_sample() < p:
+        # decide for every node if it will be a leaf
+        n_children = all_nodes_info[type(self)]['expected_num_children']
+        for i in range(n_children):
+            if random_sample() < p:
                 # generate a leaf
                 node_type = get_random_node('LEAF', 'ARITHMETIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
             else:
                 # generate a branch
                 node_type = get_random_node('BRANCH', 'ARITHMETIC')
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
+
+            node = node_type()
+            node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
+            self.add_child(node)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -539,6 +559,14 @@ class ComparisonNode(LogicalNode):
 
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
+        """
+        raise NotImplementedError
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
         """
         raise NotImplementedError
 
@@ -551,21 +579,24 @@ class SumNode(ArithmeticNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[float, np.ndarray]:
         """
         Sums up the values of its children.
 
         :param environment: Dictionary holding values for parameters.
         :return: Float
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
 
         if self.is_bloat:
             return self.bloat_val
@@ -595,6 +626,16 @@ class SumNode(ArithmeticNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} + {src_2})'
+
 
 class ProductNode(ArithmeticNode):
     """
@@ -604,22 +645,24 @@ class ProductNode(ArithmeticNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[float, np.ndarray]:
         """
         Multiplies all values of its children.
 
         :param environment: Dictionary holding values for parameters.
         :return: Float
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -654,6 +697,16 @@ class ProductNode(ArithmeticNode):
             self.bloat_val = self.bloat_min
             self.bloat_max = self.bloat_min
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} * {src_2})'
+
 
 class AndNode(BinaryLogicalNode):
     """
@@ -663,22 +716,24 @@ class AndNode(BinaryLogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
+        assert isinstance(self.children[1], LogicalNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Applies a logic AND on its children values.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], LogicalNode)
-        assert isinstance(self.children[1], LogicalNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -712,6 +767,16 @@ class AndNode(BinaryLogicalNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} & {src_2})'
+
 
 class OrNode(BinaryLogicalNode):
     """
@@ -721,25 +786,24 @@ class OrNode(BinaryLogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 2
 
-        self.bloat_min = 0
-        self.bloat_max = 1
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
+        assert isinstance(self.children[1], LogicalNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Applies a logic OR on its children values.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], LogicalNode)
-        assert isinstance(self.children[1], LogicalNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -773,6 +837,16 @@ class OrNode(BinaryLogicalNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} | {src_2})'
+
 
 class SmallerNode(ComparisonNode):
     """
@@ -782,12 +856,18 @@ class SmallerNode(ComparisonNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> [bool, np.ndarray]:
         """
         Return True if the value of the 0th-child is smaller than the value
         of the 1st-child, False otherwise.
@@ -795,10 +875,6 @@ class SmallerNode(ComparisonNode):
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -839,6 +915,16 @@ class SmallerNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} < {src_2})'
+
 
 class SmallerEqualNode(ComparisonNode):
     """
@@ -848,12 +934,18 @@ class SmallerEqualNode(ComparisonNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> [bool, np.ndarray]:
         """
         Return True if the value of the 0th-child is smaller-equal than the
         value of the 1st-child, False otherwise.
@@ -861,10 +953,6 @@ class SmallerEqualNode(ComparisonNode):
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -905,137 +993,15 @@ class SmallerEqualNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-
-class GreaterEqualNode(ComparisonNode):
-    """
-    GreaterEqualNode object. Its children should be ARITHMETIC, and it evaluates
-    to a LOGIC value. It must have exactly two children.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
-
-    def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+    def python_npy_jit(self) -> str:
         """
-        Return True if the value of the 0th-child is greater-equal the value
-        of the 1st-child, False otherwise.
+        Writes python code in a string, so it can be compiled.
 
-        :param environment: Dictionary holding values for parameters.
-        :return: Bool
+        :return: Python code as a string.
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
-        if self.is_bloat:
-            return self.bloat_val
-
-        c1 = self.children[0].eval(environment)
-        c2 = self.children[1].eval(environment)
-        res = c1 >= c2
-        return res
-
-    def determine_bloat(self,
-                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
-        """
-        Determines the bloat values for this node.
-        It will first determine the bloat values for its children and then the
-        bloat values for itself.
-
-        :param env_stats: Statistics for the parameters of the environment.
-        :return: None
-        """
-        for child in self.children:
-            child.determine_bloat(env_stats)
-
-        if self.children[0].bloat_min >= self.children[1].bloat_max:
-            # child 0 will always be greater equal than child 1
-            # node will always evaluate to True
-            self.bloat_min = True
-            self.bloat_max = True
-            self.is_bloat = True
-            self.bloat_val = True
-        elif self.children[0].bloat_max < self.children[1].bloat_min:
-            # child 0 will always be smaller than child 1
-            # node will always evaluate to False
-            self.bloat_min = False
-            self.bloat_max = False
-            self.is_bloat = True
-            self.bloat_val = False
-        else:
-            # node ranges overlap, so no conclusion can be made
-            self.bloat_min = False
-            self.bloat_max = True
-
-
-class GreaterNode(ComparisonNode):
-    """
-    GreaterNode object. Its children should be ARITHMETIC, and it evaluates
-    to a LOGIC value. It must have exactly two children.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
-
-    def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
-        """
-        Return True if the value of the 0th-child is greater-equal the value
-        of the 1st-child.
-
-        :param environment: Dictionary holding values for parameters.
-        :return: Bool
-        """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
-        if self.is_bloat:
-            return self.bloat_val
-
-        c1 = self.children[0].eval(environment)
-        c2 = self.children[1].eval(environment)
-        res = c1 > c2
-        return res
-
-    def determine_bloat(self,
-                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
-        """
-        Determines the bloat values for this node.
-        It will first determine the bloat values for its children and then the
-        bloat values for itself.
-
-        :param env_stats: Statistics for the parameters of the environment.
-        :return: None
-        """
-        for child in self.children:
-            child.determine_bloat(env_stats)
-
-        if self.children[0].bloat_min > self.children[1].bloat_max:
-            # child 0 will always be greater than child 1
-            # node will always evaluate to True
-            self.bloat_min = True
-            self.bloat_max = True
-            self.is_bloat = True
-            self.bloat_val = True
-        elif self.children[0].bloat_max <= self.children[1].bloat_min:
-            # child 0 will always be smaller-equal than child 1
-            # node will always evaluate to False
-            self.bloat_min = False
-            self.bloat_max = False
-            self.is_bloat = True
-            self.bloat_val = False
-        else:
-            # node ranges overlap, so no conclusion can be made
-            self.bloat_min = False
-            self.bloat_max = True
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} <= {src_2})'
 
 
 class EqualNode(ComparisonNode):
@@ -1046,12 +1012,18 @@ class EqualNode(ComparisonNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "ARITHMETIC"
-        self.num_children = 2
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Return True if the value of the 0th-child is equal the value of the
         1st-child, False otherwise.
@@ -1059,10 +1031,6 @@ class EqualNode(ComparisonNode):
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 2
-        assert isinstance(self.children[0], ArithmeticNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -1113,6 +1081,172 @@ class EqualNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} == {src_2})'
+
+
+class GreaterEqualNode(ComparisonNode):
+    """
+    GreaterEqualNode object. Its children should be ARITHMETIC, and it evaluates
+    to a LOGIC value. It must have exactly two children.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
+
+    def eval(self,
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
+        """
+        Return True if the value of the 0th-child is greater-equal the value
+        of the 1st-child, False otherwise.
+
+        :param environment: Dictionary holding values for parameters.
+        :return: Bool
+        """
+        if self.is_bloat:
+            return self.bloat_val
+
+        c1 = self.children[0].eval(environment)
+        c2 = self.children[1].eval(environment)
+        res = c1 >= c2
+        return res
+
+    def determine_bloat(self,
+                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
+        """
+        Determines the bloat values for this node.
+        It will first determine the bloat values for its children and then the
+        bloat values for itself.
+
+        :param env_stats: Statistics for the parameters of the environment.
+        :return: None
+        """
+        for child in self.children:
+            child.determine_bloat(env_stats)
+
+        if self.children[0].bloat_min >= self.children[1].bloat_max:
+            # child 0 will always be greater equal than child 1
+            # node will always evaluate to True
+            self.bloat_min = True
+            self.bloat_max = True
+            self.is_bloat = True
+            self.bloat_val = True
+        elif self.children[0].bloat_max < self.children[1].bloat_min:
+            # child 0 will always be smaller than child 1
+            # node will always evaluate to False
+            self.bloat_min = False
+            self.bloat_max = False
+            self.is_bloat = True
+            self.bloat_val = False
+        else:
+            # node ranges overlap, so no conclusion can be made
+            self.bloat_min = False
+            self.bloat_max = True
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} >= {src_2})'
+
+
+class GreaterNode(ComparisonNode):
+    """
+    GreaterNode object. Its children should be ARITHMETIC, and it evaluates
+    to a LOGIC value. It must have exactly two children.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], ArithmeticNode)
+        assert isinstance(self.children[1], ArithmeticNode)
+
+    def eval(self,
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
+        """
+        Return True if the value of the 0th-child is greater-equal the value
+        of the 1st-child.
+
+        :param environment: Dictionary holding values for parameters.
+        :return: Bool
+        """
+        if self.is_bloat:
+            return self.bloat_val
+
+        c1 = self.children[0].eval(environment)
+        c2 = self.children[1].eval(environment)
+        res = c1 > c2
+        return res
+
+    def determine_bloat(self,
+                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
+        """
+        Determines the bloat values for this node.
+        It will first determine the bloat values for its children and then the
+        bloat values for itself.
+
+        :param env_stats: Statistics for the parameters of the environment.
+        :return: None
+        """
+        for child in self.children:
+            child.determine_bloat(env_stats)
+
+        if self.children[0].bloat_min > self.children[1].bloat_max:
+            # child 0 will always be greater than child 1
+            # node will always evaluate to True
+            self.bloat_min = True
+            self.bloat_max = True
+            self.is_bloat = True
+            self.bloat_val = True
+        elif self.children[0].bloat_max <= self.children[1].bloat_min:
+            # child 0 will always be smaller-equal than child 1
+            # node will always evaluate to False
+            self.bloat_min = False
+            self.bloat_max = False
+            self.is_bloat = True
+            self.bloat_val = False
+        else:
+            # node ranges overlap, so no conclusion can be made
+            self.bloat_min = False
+            self.bloat_max = True
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        return f'({src_1} > {src_2})'
+
 
 class NegationNode(UnaryLogicalNode):
     """
@@ -1122,21 +1256,23 @@ class NegationNode(UnaryLogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 1
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Negates the value of its child.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 1
-        assert isinstance(self.children[0], LogicalNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -1157,9 +1293,6 @@ class NegationNode(UnaryLogicalNode):
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
         """
-        assert self.num_children == len(self.children) == 1
-        assert isinstance(self.children[0], LogicalNode)
-
         for child in self.children:
             child.determine_bloat(env_stats)
 
@@ -1169,22 +1302,24 @@ class NegationNode(UnaryLogicalNode):
             self.is_bloat = True
             if isinstance(self.children[0].bloat_val, np.ndarray):
                 self.bloat_val = ~self.children[0].bloat_val
-            elif isinstance(self.children[0].bloat_val, bool):
-                self.bloat_val = not self.children[0].bloat_val
-
-            if isinstance(self.children[0].bloat_min, np.ndarray):
                 self.bloat_min = ~self.children[0].bloat_min
-            elif isinstance(self.children[0].bloat_min, bool):
-                self.bloat_min = not self.children[0].bloat_min
-
-            if isinstance(self.children[0].bloat_max, np.ndarray):
                 self.bloat_max = ~self.children[0].bloat_max
-            elif isinstance(self.children[0].bloat_max, bool):
+            else:
+                self.bloat_val = not self.children[0].bloat_val
+                self.bloat_min = not self.children[0].bloat_min
                 self.bloat_max = not self.children[0].bloat_max
-
         else:
             self.bloat_min = False
             self.bloat_max = True
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        return f'(~{src_1})'
 
 
 class IdentityLogicalNode(UnaryLogicalNode):
@@ -1195,21 +1330,23 @@ class IdentityLogicalNode(UnaryLogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "LOGIC"
-        self.num_children = 1
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Returns the value of its child.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 1
-        assert isinstance(self.children[0], LogicalNode)
-
         if self.is_bloat:
             return self.bloat_val
 
@@ -1240,6 +1377,15 @@ class IdentityLogicalNode(UnaryLogicalNode):
             self.bloat_min = False
             self.bloat_max = True
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        return f'({src_1})'
+
 
 class DecisionNode(ArithmeticNode):
     """
@@ -1249,12 +1395,19 @@ class DecisionNode(ArithmeticNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "DECISION"
-        self.num_children = 3
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
+        assert isinstance(self.children[1], ArithmeticNode)
+        assert isinstance(self.children[2], ArithmeticNode)
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[float, np.ndarray]:
         """
         If the 0th child evaluates to True it will propagate the 1st child
         value, else it will propagate the 2nd child value.
@@ -1262,11 +1415,6 @@ class DecisionNode(ArithmeticNode):
         :param environment: Dictionary holding values for parameters.
         :return: Float
         """
-        assert self.num_children == len(self.children) == 3
-        assert isinstance(self.children[0], LogicalNode)
-        assert isinstance(self.children[1], ArithmeticNode)
-        assert isinstance(self.children[2], ArithmeticNode)
-
         if self.is_bloat:
             return self.children[self.bloat_val].eval(environment)
 
@@ -1283,7 +1431,7 @@ class DecisionNode(ArithmeticNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Constructs a tree with this root as root. It will generate children
+        Constructs a tree with this node as root. It will generate children
         and append them to its self and sets its corresponding values. After
         min_depth the chance of leaves rises to 100% at max_depth.
 
@@ -1293,25 +1441,24 @@ class DecisionNode(ArithmeticNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        # determine the probability that a leaf node occurs
+        # determine the p that a leaf node occurs
         incr = 1.0 / (max_depth - min_depth)
         p = 0.0 if depth < min_depth else incr * (depth - min_depth)
 
         # decide for every node if it will be a leaf
         node_types = ['LOGIC', 'ARITHMETIC', 'ARITHMETIC']
-        for i in range(3):
-            if get_random_sample() < p:
+        n_children = all_nodes_info[type(self)]['expected_num_children']
+        for i in range(n_children):
+            if random_sample() < p:
                 # generate a leaf
                 node_type = get_random_node('LEAF', node_types[i])
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
             else:
                 # generate a branch
                 node_type = get_random_node('BRANCH', node_types[i])
-                node = node_type()
-                node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
-                self.add_child(node)
+
+            node = node_type()
+            node.construct_tree(depth + 1, min_depth, max_depth, env_vars)
+            self.add_child(node)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1339,8 +1486,19 @@ class DecisionNode(ArithmeticNode):
         """
         self.children[1], self.children[2] = self.children[2], self.children[1]
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
 
-class ConstantArithmeticNode(ArithmeticNode):
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].python_npy_jit()
+        src_2 = self.children[1].python_npy_jit()
+        src_3 = self.children[2].python_npy_jit()
+        return f'(({src_1} * {src_2}) + ((1 - {src_1}) * {src_3}))'
+
+
+class ArithmeticConstantNode(ArithmeticNode):
     """
     ConstantNode object. Any children will be ignored, and it will only return
     one constant value.
@@ -1348,22 +1506,25 @@ class ConstantArithmeticNode(ArithmeticNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "NONE"
-        self.num_children = 0
 
         self.constant = 1.0
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        pass
+
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> float:
         """
         Returns the float constant.
 
         :param environment: Dictionary holding values for parameters.
         :return: Float
         """
-        assert self.num_children == len(self.children) == 0
-
         res = self.constant
         return res
 
@@ -1373,7 +1534,7 @@ class ConstantArithmeticNode(ArithmeticNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Randomly sets the constant value of the root between [0, 1).
+        Randomly sets the constant value of the node between [0, 1).
 
         :param depth: Current depth of the tree.
         :param min_depth: Minimal depth the tree should have.
@@ -1381,7 +1542,7 @@ class ConstantArithmeticNode(ArithmeticNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.constant = get_random_sample()
+        self.constant = random_sample()
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1406,31 +1567,42 @@ class ConstantArithmeticNode(ArithmeticNode):
         """
         self.constant = np.random.random_sample()
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
 
-class ConstantLogicalNode(LogicalNode):
+        :return: Python code as a string.
+        """
+        return f'{self.constant}'
+
+
+class LogicalConstantNode(LogicalNode):
     """
-    ConstantLogicalNode object. Any children will be ignored, and it will only
+    LogicalConstantNode object. Any children will be ignored, and it will only
     return one constant value.
     """
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGICAL"
-        self.children_type = "NONE"
-        self.num_children = 0
 
         self.constant = True
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        pass
+
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> bool:
         """
         Returns the boolean constant.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool
         """
-        assert self.num_children == len(self.children) == 0
-
         res = self.constant
         return res
 
@@ -1440,7 +1612,7 @@ class ConstantLogicalNode(LogicalNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Randomly sets the constant value of the root between [0, 1).
+        Randomly sets the constant value of the node between [0, 1).
 
         :param depth: Current depth of the tree.
         :param min_depth: Minimal depth the tree should have.
@@ -1448,7 +1620,7 @@ class ConstantLogicalNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.constant = bool(random.getrandbits(1))
+        self.constant = random_sample() < 0.5
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1471,7 +1643,15 @@ class ConstantLogicalNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.constant = bool(random.getrandbits(1))
+        self.constant = random_sample() < 0.5
+
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        return f'{self.constant}'
 
 
 class ArithmeticParameterNode(ArithmeticNode):
@@ -1482,23 +1662,26 @@ class ArithmeticParameterNode(ArithmeticNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "ARITHMETIC"
-        self.children_type = "NONE"
-        self.num_children = 0
 
         self.parameter = 'NONE'
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        pass
+
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> float:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[float, np.ndarray]:
         """
         Returns the float value for the set parameter.
 
         :param environment: Dictionary holding values for parameters.
         :return: Float
         """
-        assert self.num_children == len(self.children) == 0
-
-        res = environment[self.type][self.parameter]
+        res = environment['ARITHMETIC'][self.parameter]
         return res
 
     def construct_tree(self,
@@ -1507,7 +1690,7 @@ class ArithmeticParameterNode(ArithmeticNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Randomly sets the parameter for the root.
+        Randomly sets the parameter for the node.
 
         :param depth: Current depth of the tree.
         :param min_depth: Minimal depth the tree should have.
@@ -1540,6 +1723,14 @@ class ArithmeticParameterNode(ArithmeticNode):
         """
         self.parameter = random.choice(env_vars['ARITHMETIC'])
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :return: Python code as a string.
+        """
+        return f"env['ARITHMETIC']['{self.parameter}']"
+
 
 class LogicParameterNode(LogicalNode):
     """
@@ -1549,23 +1740,26 @@ class LogicParameterNode(LogicalNode):
 
     def __init__(self):
         super().__init__()
-        self.type = "LOGIC"
-        self.children_type = "NONE"
-        self.num_children = 0
 
         self.parameter = 'NONE'
 
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        pass
+
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> bool:
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
         """
         Returns the boolean value for the set parameter.
 
         :param environment: Dictionary holding values for parameters.
         :return: Bool.
         """
-        assert self.num_children == len(self.children) == 0
-
-        res = environment[self.type][self.parameter]
+        res = environment['LOGIC'][self.parameter]
         return res
 
     def construct_tree(self,
@@ -1574,7 +1768,7 @@ class LogicParameterNode(LogicalNode):
                        max_depth: int,
                        env_vars: Dict[str, List[str]]) -> None:
         """
-        Randomly sets the parameter for the root.
+        Randomly sets the parameter for the node.
 
         :param depth: Current depth of the tree.
         :param min_depth: Minimal depth the tree should have.
@@ -1607,8 +1801,16 @@ class LogicParameterNode(LogicalNode):
         """
         self.parameter = random.choice(env_vars['LOGIC'])
 
+    def python_npy_jit(self) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
 
-# available types, nodes and probabilities
+        :return: Python code as a string.
+        """
+        return f"env['LOGIC']['{self.parameter}']"
+
+
+# available types, nodes, probabilities and information
 all_types = ['ARITHMETIC', 'LOGIC', 'DECISION', 'NONE']
 all_branch_nodes = np.array([SumNode, DecisionNode, AndNode, OrNode, SmallerNode, SmallerEqualNode,
                              GreaterEqualNode, GreaterNode, EqualNode,
@@ -1619,8 +1821,8 @@ all_nodes = {
                                   GreaterEqualNode, GreaterNode, EqualNode,
                                   NegationNode, IdentityLogicalNode])
                },
-    'LEAF': {'ARITHMETIC': np.array([ConstantArithmeticNode, ArithmeticParameterNode]),
-             'LOGIC': np.array([ConstantLogicalNode, LogicParameterNode])
+    'LEAF': {'ARITHMETIC': np.array([ArithmeticConstantNode, ArithmeticParameterNode]),
+             'LOGIC': np.array([LogicalConstantNode, LogicParameterNode])
              }
 }
 all_nodes_p = {
@@ -1632,6 +1834,30 @@ all_nodes_p = {
              'LOGIC': np.array([0.1, 0.9])
              }
 }
+
+all_nodes_info = {Node: {'type': 'UNINITIALIZED', 'children_type': 'UNINITIALIZED', 'similar_nodes': [], 'expected_num_children': 0},
+                  ArithmeticNode: {'type': 'ARITHMETIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SumNode, ProductNode], 'expected_num_children': 2},
+                  LogicalNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [], 'expected_num_children': 2},
+                  BinaryLogicalNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [AndNode, OrNode], 'expected_num_children': 2},
+                  UnaryLogicalNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [NegationNode, IdentityLogicalNode], 'expected_num_children': 1},
+                  ComparisonNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  SumNode: {'type': 'ARITHMETIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [ProductNode], 'expected_num_children': 2},
+                  ProductNode: {'type': 'ARITHMETIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SumNode], 'expected_num_children': 2},
+                  AndNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [OrNode], 'expected_num_children': 2},
+                  OrNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [AndNode], 'expected_num_children': 2},
+                  SmallerNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerEqualNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  SmallerEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  EqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  GreaterEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterNode], 'expected_num_children': 2},
+                  GreaterNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterEqualNode], 'expected_num_children': 2},
+                  NegationNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [IdentityLogicalNode], 'expected_num_children': 1},
+                  IdentityLogicalNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [NegationNode], 'expected_num_children': 1},
+                  DecisionNode: {'type': 'ARITHMETIC', 'children_type': 'DECISION', 'similar_nodes': [], 'expected_num_children': 3},
+                  ArithmeticConstantNode: {'type': 'ARITHMETIC', 'children_type': 'NONE', 'similar_nodes': [], 'expected_num_children': 0},
+                  LogicalConstantNode: {'type': 'LOGICAL', 'children_type': 'NONE', 'similar_nodes': [], 'expected_num_children': 0},
+                  ArithmeticParameterNode: {'type': 'ARITHMETIC', 'children_type': 'NONE', 'similar_nodes': [], 'expected_num_children': 0},
+                  LogicParameterNode: {'type': 'LOGICAL', 'children_type': 'NONE', 'similar_nodes': [], 'expected_num_children': 0}
+                  }
 
 """
 Operations on nodes.
@@ -1658,75 +1884,48 @@ def get_random_node(branch_type: str,
     return random_nodes[branch_type][node_type].pop()
 
 
-random_numbers = {0: np.random.sample(size=10000).tolist()}
-
-
-def get_random_sample():
+def swap_nodes(node_1: 'Node',
+               node_2: 'Node',
+               swap_children: bool = True) -> None:
     """
-    Function to quickly generate a new sample between [0, 1].
+    Swaps the first node with the second node. Also swaps the two-way
+    connection between the children and parents.
 
-    :return: Sample between [0, 1]
+    :param node_1: The first node.
+    :param node_2: The second node.
+    :param swap_children: If children should also be swapped.
+    :return: None
     """
-    if not random_numbers[0]:
-        random_numbers[0] = np.random.sample(size=10000).tolist()
+    # get the parents
+    node_1_parent = node_1.parent
+    node_2_parent = node_2.parent
 
-    return random_numbers[0].pop()
+    if node_1_parent is not None:
+        # node 1 has a parent, manage connections
+        idx = node_1_parent.children.index(node_1)
+        node_1_parent.children[idx] = node_2
 
+    node_2.parent = node_1_parent
 
-def count_nodes(root: Node) -> int:
-    """
-    Recursively counts the number of nodes.
+    if node_2_parent is not None:
+        # node 2 has a parent, manage connections
+        idx = node_2_parent.children.index(node_2)
+        node_2_parent.children[idx] = node_1
 
-    :param root: Root node.
-    :return: Total number of nodes.
-    """
-    n = 0
-    node_list = [root]
-    while node_list:
-        node = node_list.pop()
-        n += 1
-        node_list.extend(node.children)
-    return n
+    node_1.parent = node_2_parent
 
+    if swap_children:
+        node_1_children = node_1.children
+        node_2_children = node_2.children
 
-def count_non_bloat_nodes(root: Node) -> int:
-    """
-    Recursively counts the number of non bloat nodes.
+        for child in node_1_children:
+            child.parent = node_2
 
-    :param root: Root node.
-    :return: Total number of nodes.
-    """
-    n = 0
-    node_list = [root]
-    while node_list:
-        node = node_list.pop()
-        if not node.is_bloat:
-            n += 1
-        for child in node.children:
-            if not child.is_bloat:
-                node_list.append(child)
-    return n
+        for child in node_2_children:
+            child.parent = node_1
 
-
-def leaf_type_count(root: Node) -> Dict[str, int]:
-    """
-    Counts the number of leaf_types with respect to the constant/parameter.
-
-    :param root: Root node.
-    :return: Dictionary holding the count for each parameter.
-    """
-    par_count = {}
-    node_list = [root]
-    while node_list:
-        node = node_list.pop()
-        if node.children_type == 'NONE':
-            # node has no child, so it's a leaf
-            if node.__class__.__name__ not in par_count:
-                par_count[node.__class__.__name__] = 0
-            par_count[node.__class__.__name__] += 1
-        else:
-            node_list.extend(node.children)
-    return par_count
+        node_1.children = node_2_children
+        node_2.children = node_1_children
 
 
 def recombine_nodes(node_1: Node, node_2: Node) -> None:
@@ -1735,20 +1934,8 @@ def recombine_nodes(node_1: Node, node_2: Node) -> None:
     in their respective tree. It will also connect the parents.
     Only nodes with the same type can be swapped.
 
-    :param node_1: Node 1 in tree a.
-    :param node_2: Node 2 in tree b.
+    :param node_1: Node 1 in tree 1.
+    :param node_2: Node 2 in tree 2.
     :return: None
     """
-    assert type(node_1) == type(node_2)
-
-    # get parents
-    node_1_parent = node_1.parent
-    node_2_parent = node_2.parent
-
-    # swap the nodes
-    node_1_parent.swap_child(node_1, node_2)
-    node_2_parent.swap_child(node_2, node_1)
-
-    # connect parents
-    node_1.parent = node_2_parent
-    node_2.parent = node_1_parent
+    swap_nodes(node_1, node_2, swap_children=False)
