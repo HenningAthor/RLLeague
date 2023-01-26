@@ -3,7 +3,7 @@ File to implement convenience functions for data loading and manipulation.
 """
 import csv
 import re
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
 
 import numpy as np
 import pandas as pd
@@ -192,3 +192,86 @@ def scale_with_min_max(features: np.ndarray,
         assert np.all((features[:, i] <= 1.0))
 
     return features
+
+
+def reorder_columns(game_data: np.ndarray,
+                    headers: List[str],
+                    order: List[str]) -> np.ndarray:
+    """
+    Reorders the columns of the game data to fit the new order.
+
+    :param game_data: Date of the game.
+    :param headers: Current order of the headers.
+    :param order: New order of the columns.
+    :return: The game data newly ordered.
+    """
+    permutation = [headers.index(col) for col in order]
+    return game_data[:, permutation]
+
+
+def concat_multiple_datasets(list_game_data: List[np.ndarray],
+                             list_headers: List[List[str]]) -> Tuple[np.ndarray, List[str]]:
+    """
+    Takes multiple loaded data files and converts them into one big file.
+
+    :param list_game_data: List of game data.
+    :param list_headers: List of headers for each game data.
+    """
+    game_data = list_game_data[0]
+    headers = list_headers[0]
+
+    for i in range(1, len(list_game_data)):
+        data = reorder_columns(list_game_data[i], list_headers[i], headers)
+        game_data = np.concatenate((game_data, data), axis=0)
+
+    return game_data, headers
+
+
+def generate_env_stats(env_variables: Dict[str, List[str]],
+                       min_max_data: np.ndarray,
+                       headers: List[str]) -> Dict[str, Dict[str, Dict[str, Union[float, bool]]]]:
+    """
+    Generates the environment statistics.
+
+    :param env_variables: Variables in the environment.
+    :param min_max_data: Array holding minimum and maximum value.
+    :param headers: Name of the columns.
+    :return: Dictionary holding the minimum and maximum value for each variable.
+    """
+    # fill environment stats
+    env_stats = {'ARITHMETIC': dict(), 'LOGIC': dict()}
+    for key in env_variables['ARITHMETIC']:
+        idx = headers.index(key)
+        env_stats['ARITHMETIC'][key] = {'min': min_max_data[1][idx], 'max': min_max_data[0][idx]}
+    for key in env_variables['LOGIC']:
+        idx = headers.index(key)
+        env_stats['LOGIC'][key] = {'min': bool(min_max_data[1][idx]), 'max': bool(min_max_data[1][idx])}
+
+    for key in env_variables['ARITHMETIC']:
+        env_stats['ARITHMETIC'][key]['min'] = 0.0
+        env_stats['ARITHMETIC'][key]['max'] = 1.0
+    for key in env_variables['LOGIC']:
+        env_stats['LOGIC'][key]['min'] = False
+        env_stats['LOGIC'][key]['max'] = True
+
+    return env_stats
+
+
+def generate_env(env_variables: Dict[str, List[str]],
+                 features: np.ndarray,
+                 headers: List[str]) -> Dict[str, Dict[str, Union[float, bool, np.ndarray]]]:
+    """
+    Generates the environment statistics.
+
+    :param env_variables: Variables in the environment.
+    :param features: Array holding the features.
+    :param headers: Name of the columns.
+    :return: Dictionary holding the values for all variables.
+    """
+    env = {'ARITHMETIC': dict(), 'LOGIC': dict()}
+    for key in env_variables['ARITHMETIC']:
+        env['ARITHMETIC'][key] = features[:, headers.index(key)]
+    for key in env_variables['LOGIC']:
+        env['LOGIC'][key] = np.array(features[:, headers.index(key)], dtype=int)
+
+    return env
