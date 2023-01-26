@@ -1,27 +1,36 @@
 """
-Script to train one bot via evolution.
-It will use a downloaded match to test the performance of the bot.
-The bot will be mutated 100 times and the mutated bot with the smallest error is
+Script to train one agent via evolution.
+It will use a downloaded match to test the performance of the agent.
+The agent will be mutated 100 times and the mutated agent with the smallest error is
 chosen next for mutation. This process is repeated 100 times.
 """
+import random
+import time
+
 import numpy as np
 
-from bot.bot import recombine_bots
-from genetic_lab.bot_generation import create_bot
-from recorded_data.data_util import load_match, split_data, load_min_max_csv, scale_with_min_max
+from agent.agent import recombine_agents, Agent, recombine_agents_by_tree
+from recorded_data.data_util import load_match, split_data, load_min_max_csv, scale_with_min_max, load_all_parquet_paths, concat_multiple_datasets, generate_env_stats, generate_env
 
 if __name__ == '__main__':
-    # load the game data
-    game_data, headers = load_match(f'recorded_data/out/a7303c84-7d9e-472d-aa60-403388827a41.parquet')
+    np.set_printoptions(precision=3)
 
-    # load min-max data
+    # load data
+    n_data = 10
+    file_list = load_all_parquet_paths()
+    list_game_data = []
+    list_headers = []
+    for i in range(n_data):
+        # load the game data
+        game_data, headers = load_match(file_list[i])
+        list_game_data.append(game_data)
+        list_headers.append(headers)
+    game_data, headers = concat_multiple_datasets(list_game_data, list_headers)
+
+    # operate on data
     min_max_data, min_max_headers = load_min_max_csv()
-
-    # normalize game data
-    game_data = scale_with_min_max(game_data, headers, min_max_data, min_max_headers)
-
-    # split the data
     features, player1, player2, features_header, player1_header, player2_header = split_data(game_data, headers)
+    features = scale_with_min_max(features, features_header, min_max_data, min_max_headers)
 
     env_variables = {'ARITHMETIC': ['ball/pos_x',
                                     'ball/pos_y',
@@ -67,96 +76,112 @@ if __name__ == '__main__':
                                'player2/on_ground',
                                'player2/ball_touched',
                                'player2/has_jump',
-                               'player2/has_flip']
-                     }
+                               'player2/has_flip']}
 
-    # fill environment stats
-    env_stats = {'ARITHMETIC': dict(),
-                 'LOGIC': dict()
-                 }
-    for key in env_variables['ARITHMETIC']:
-        env_stats['ARITHMETIC'][key] = {'min': 0.0, 'max': 1.0}
-    for key in env_variables['LOGIC']:
-        env_stats['LOGIC'][key] = {'min': False, 'max': True}
+    # fill the environment and the environment stats
+    env = generate_env(env_variables, features, features_header)
+    env_stats = generate_env_stats(env_variables, min_max_data, min_max_headers)
 
-    # fill the environment
-    env = {'ARITHMETIC': dict(), 'LOGIC': dict()}
-    for key in env_variables['ARITHMETIC']:
-        env['ARITHMETIC'][key] = features[:, features_header.index(key)]
-    for key in env_variables['LOGIC']:
-        env['LOGIC'][key] = np.array(features[:, features_header.index(key)], dtype=int)
+    # set parameters
+    n_epochs = 100
+    n_agents = 1000
+    errors = np.zeros((n_agents, 8))
+    n_nodes_list = np.zeros((n_agents, 8))
+    n_non_bloat_nodes_list = np.zeros((n_agents, 8))
+    weights = np.zeros((n_agents, 8))
+    mutate_p = 0.05
+    recombine_p = 0.125
 
-    # create the bots
-    bot_list = []
-    err_list = []
-    n_bots = 200
-    mutate_chance = 0.01
+    # storage so we can analyze later
+    errors_storage = np.zeros((n_epochs, n_agents, 8))
+    n_nodes_storage = np.zeros((n_epochs, n_agents, 8))
+    n_non_bloat_nodes_storage = np.zeros((n_epochs, n_agents, 8))
+    err_result_agent = np.zeros((n_epochs, 8))
 
-    for i in range(n_bots):
-        bot = create_bot(0, 10, 12, env_variables)
-        bot_list.append(bot)
-        err_list.append(0.0)
-    print('Bots created')
+    # this agent will hold all the best trees
+    result_agent = Agent(0, '', 1, 3, env_variables)
+    result_agent.python_npy_jit()
 
-    for bot in bot_list:
-        bot.bloat_analysis(env_stats)
-        bot.connect_trees()
+    # create agents
+    t = time.time()
+    agent_list = []
+    for i in range(n_agents):
+        agent = Agent(0, '', 3, 7, env_variables)
+        agent.bloat_analysis(env_stats)
+        agent.assert_agent()
+        agent.python_npy_jit()
+        agent_list.append(agent)
+    print('Agents created in', time.time() - t)
 
     # start learning
-    epochs = 100
-    min_err_list = []
-    err_mask = np.array([1, 1, 0, 0, 0, 1, 1, 1])  # we only predict those items
+    for epoch in range(n_epochs):
+        print('Epoch', epoch)
+        t = time.time()
+        for i, agent in enumerate(agent_list):
+            errors[i] = np.average(np.square(player1 - agent.eval_all(env)), axis=0)
+            n_nodes_list[i] = np.array(agent.count_nodes())
+            n_non_bloat_nodes_list[i] = np.array(agent.count_non_bloat_nodes())
+        print('Eval finished in', time.time() - t)
 
-    for epoch in range(epochs):
-        for i in range(len(bot_list)):
-            res = bot_list[i].eval_all(env)
-            err = (player1 - bot_list[i].eval_all(env)) * err_mask
-            err_list[i] += np.average(np.square(err))
-            bot_list[i].unmark_bloat()
+        errors_storage[epoch] = errors
+        n_nodes_storage[epoch] = n_nodes_list
+        n_non_bloat_nodes_storage[epoch] = n_non_bloat_nodes_list
 
-        print('Errors', err_list)
+        # get best tree from all agents
+        for i in range(8):
+            idx = np.argmin(errors[:, i])
+            result_agent.tree_list[i] = agent_list[idx].tree_list[i].__deepcopy__()
 
-        sorted_idx = sorted(range(len(err_list)), key=lambda x: err_list[x])
-        bot_list = [bot_list[i] for i in sorted_idx]
-        err_list = [err_list[i] for i in sorted_idx]
+        # check error of result agent
+        result_agent.bloat_analysis(env_stats)
+        result_agent.assert_agent()
+        err_result_agent[epoch] = np.average(np.square(player1 - result_agent.eval_all(env)), axis=0)
+        print("Result Agent")
+        print(err_result_agent[epoch])
 
-        min_bot = bot_list[0]
-        min_err_list.append(err_list[0])
-        new_bot_list = [min_bot]
-        new_err_list = [0.0]
+        new_agent_list = []
+        # mutate result agent
+        t = time.time()
+        for i in range(n_agents // 3):
+            mutated_agent = result_agent.mutate(mutate_p)
+            new_agent_list.append(mutated_agent)
+        print('Agents mutated in', time.time() - t)
 
-        # weights for recombination
-        err_list_inverted = [1/err for err in err_list]
-        error_sum = sum(err_list_inverted)
-        weights = [error/error_sum for error in err_list_inverted]
+        # generate weights for each tree
+        for i in range(8):
+            inv_w = 1 / errors[:, i]
+            weights[:, i] = inv_w / np.sum(inv_w)
 
-        # mutate the best bot
-        for i in range(34*2):
-            mutated_bot = min_bot.mutate(mutate_chance)
-            new_bot_list.append(mutated_bot)
-            new_err_list.append(0.0)
+        # recombine the best agents
+        t = time.time()
+        for i in range(n_agents // 6):
+            idx = random.randint(0, 7)  # choose which tree to recombine
+            agent_1 = np.random.choice(agent_list, p=weights[:, idx])
+            agent_2 = np.random.choice(agent_list, p=weights[:, idx])
+            rec_agent_1, rec_agent_2 = recombine_agents_by_tree(agent_1, agent_2, idx)
+            new_agent_list.append(rec_agent_1)
+            new_agent_list.append(rec_agent_2)
+        print('Agents recombined in', time.time() - t)
 
-        # recombine the best bots
-        for i in range(16*2):
-            bot_1 = np.random.choice(bot_list, p=weights)
-            bot_2 = np.random.choice(bot_list, p=weights)
-            rec_bot_1, rec_bot_2 = recombine_bots(bot_1, bot_2, 0.3)
-            new_bot_list.append(rec_bot_1)
-            new_bot_list.append(rec_bot_2)
-            new_err_list.append(0.0)
-            new_err_list.append(0.0)
+        # insert new agents
+        t = time.time()
+        for i in range(n_agents - len(new_agent_list)):
+            agent = Agent(0, '', 3, 7, env_variables)
+            new_agent_list.append(agent)
+        print('Agents created in', time.time() - t)
 
-        # insert new bots
-        for i in range(33*2):
-            bot = create_bot(0, 7, 10, env_variables)
-            new_bot_list.append(bot)
-            new_err_list.append(0.0)
+        agent_list = new_agent_list
 
-        bot_list = new_bot_list
-        err_list = new_err_list
+        # bloat analysis
+        t = time.time()
+        for agent in agent_list:
+            agent.bloat_analysis(env_stats)
+            agent.assert_agent()
+            agent.python_npy_jit()
+        print('Bloat analyzed in', time.time() - t)
 
-        for bot in bot_list:
-            bot.bloat_analysis(env_stats)
-            bot.connect_trees()
+    print('Result Agent')
+    for i in range(n_epochs):
+        print(err_result_agent[i])
 
-    print('Min Err each epoch', min_err_list)
+
