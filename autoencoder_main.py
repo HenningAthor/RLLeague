@@ -1,8 +1,8 @@
 """
 Script to learn an autoencoder.
 """
-from autoencoder.learn import learn
+from autoencoder.learn import learn_mnist
 
 
 if __name__ == '__main__':
-    learn()
+    learn_mnist()

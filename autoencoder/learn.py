@@ -4,6 +4,10 @@ Script to learn an autoencoder.
 import torch
 import torchvision
 from torch import nn, optim
+from torch.utils.data import IterableDataset
+import glob
+import pathlib
+import pandas as pd
 
 """
 Implementation from: https://medium.com/pytorch/implementing-an-autoencoder-in-pytorch-19baa22647d1
@@ -26,8 +30,23 @@ class AE(nn.Module):
         reconstructed = torch.relu(activation)
         return reconstructed
 
+class RocketLeagueDataset(IterableDataset):
+    INPUT_SIZE = 10
+    def __init__(self, path : str):
+        self.path = path
 
-def learn():
+    def extract_information(row : pd.Series):
+        raise NotImplementedError()
+    
+    def __iter__(self):
+        paths = glob.glob(pathlib.Path(self.path) / '*.parquet')
+        for path in paths:
+            df = pd.read_parquet(path)
+            for index, row in df.iterrows():
+                yield row
+
+
+def learn_mnist():
     epochs = 100
 
     #  use gpu if available
@@ -56,6 +75,59 @@ def learn():
             # reshape mini-batch data to [N, 784] matrix
             # load it to the active device
             batch_features = batch_features.view(-1, 784).to(device)
+
+            # reset the gradients back to zero
+            # PyTorch accumulates gradients on subsequent backward passes
+            optimizer.zero_grad()
+
+            # compute reconstructions
+            outputs = model(batch_features)
+
+            # compute training reconstruction loss
+            train_loss = criterion(outputs, batch_features)
+
+            # compute accumulated gradients
+            train_loss.backward()
+
+            # perform parameter update based on current gradients
+            optimizer.step()
+
+            # add the mini-batch training loss to epoch loss
+            loss += train_loss.item()
+
+        # compute the epoch training loss
+        loss = loss / len(train_loader)
+
+        # display the epoch training loss
+        print("epoch : {}/{}, loss = {:.6f}".format(epoch + 1, epochs, loss))
+
+def learn_rl(path : str, epochs: int):
+    epochs = 100
+
+    #  use gpu if available
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # create a model from `AE` autoencoder class
+    # load it to the specified device, either gpu or cpu
+    model = AE(input_size= RocketLeagueDataset.INPUT_SIZE, hidden_size=32).to(device)
+
+    # create an optimizer object
+    # Adam optimizer with learning rate 1e-3
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+    # mean-squared error loss
+    criterion = nn.MSELoss()
+
+    transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+    train_dataset = RocketLeagueDataset('ae_data')
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
+
+    for epoch in range(epochs):
+        loss = 0
+        for batch_features, _ in train_loader:
+            # reshape mini-batch data to [N, 784] matrix
+            # load it to the active device
+            batch_features = batch_features.view(-1, RocketLeagueDataset.INPUT_SIZE).to(device)
 
             # reset the gradients back to zero
             # PyTorch accumulates gradients on subsequent backward passes

@@ -5,3 +5,4 @@ data_scraping/replays
 agent_storage/*
 
 recorded_data/*
+ae_data/
