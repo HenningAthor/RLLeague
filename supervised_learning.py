@@ -84,13 +84,15 @@ if __name__ == '__main__':
 
     # set parameters
     n_epochs = 100
-    n_agents = 1000
+    n_agents = 100
     errors = np.zeros((n_agents, 8))
     n_nodes_list = np.zeros((n_agents, 8))
     n_non_bloat_nodes_list = np.zeros((n_agents, 8))
     weights = np.zeros((n_agents, 8))
     mutate_p = 0.05
     recombine_p = 0.125
+    min_tree_size = 3
+    max_tree_size = 7
 
     # storage so we can analyze later
     errors_storage = np.zeros((n_epochs, n_agents, 8))
@@ -106,7 +108,7 @@ if __name__ == '__main__':
     t = time.time()
     agent_list = []
     for i in range(n_agents):
-        agent = Agent(0, '', 3, 7, env_variables)
+        agent = Agent(0, '', min_tree_size, max_tree_size, env_variables)
         agent.bloat_analysis(env_stats)
         agent.assert_agent()
         agent.python_npy_jit()
@@ -128,9 +130,13 @@ if __name__ == '__main__':
         n_non_bloat_nodes_storage[epoch] = n_non_bloat_nodes_list
 
         # get best tree from all agents
+        res = np.average(np.square(player1 - result_agent.eval_all(env)), axis=0)
         for i in range(8):
+            minimum = np.min(errors[:, i])
             idx = np.argmin(errors[:, i])
-            result_agent.tree_list[i] = agent_list[idx].tree_list[i].__deepcopy__()
+
+            if res[i] > minimum:
+                result_agent.tree_list[i] = agent_list[idx].tree_list[i].__deepcopy__()
 
         # check error of result agent
         result_agent.bloat_analysis(env_stats)
@@ -166,7 +172,7 @@ if __name__ == '__main__':
         # insert new agents
         t = time.time()
         for i in range(n_agents - len(new_agent_list)):
-            agent = Agent(0, '', 3, 7, env_variables)
+            agent = Agent(0, '', min_tree_size, max_tree_size, env_variables)
             new_agent_list.append(agent)
         print('Agents created in', time.time() - t)
 
@@ -184,4 +190,4 @@ if __name__ == '__main__':
     for i in range(n_epochs):
         print(err_result_agent[i])
 
-
+    result_agent.prepare_for_rlbot()
