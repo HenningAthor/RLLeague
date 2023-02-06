@@ -146,7 +146,7 @@ def combine_plots():
     tree_names = ['Throttle', 'Steer', 'Pitch', 'Yaw', 'Roll', 'Jump', 'Boost', 'Handbrake']
     mutate_probabilities = [0.001, 0.01, 0.05, 0.1, 0.25, 0.5]
     recombine_probabilities = [0.01, 0.125, 0.5]
-    tree_sizes = [(2, 4), (3, 7), (5, 9), (7, 12), (10, 15)]
+    tree_sizes = [(2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]
 
     for p1, p2, (min_size, max_size) in itertools.product(mutate_probabilities, recombine_probabilities, tree_sizes):
 
