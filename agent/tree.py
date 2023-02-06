@@ -26,7 +26,7 @@ class Tree(object):
         self.post_process_func: callable = scale_continuous
 
         self.numba_jit_function: Union[callable, None] = None
-        self.is_jit_npy: bool = False
+        self.is_numba_jitted: bool = False
 
         self.set_eval_post_process()
 
@@ -48,7 +48,7 @@ class Tree(object):
         new_tree.return_max = self.return_max
         new_tree.discrete_return = self.discrete_return
         new_tree.post_process_func = self.post_process_func
-        new_tree.is_jit_npy = self.is_jit_npy
+        new_tree.is_numba_jitted = self.is_numba_jitted
         new_tree.numba_jit_function = self.numba_jit_function
 
         return new_tree
@@ -93,7 +93,7 @@ class Tree(object):
         :param arr: (Optional) The original array holding the data.
         :return: Float or array
         """
-        if self.is_jit_npy and arr is not None:
+        if self.is_numba_jitted and arr is not None:
             res = self.numba_jit_function(arr)
         else:
             res = self.root.eval(environment)
@@ -121,7 +121,7 @@ class Tree(object):
         :param arr: (Optional) The original array holding the data.
         :return: Float or array
         """
-        if self.is_jit_npy and arr is not None:
+        if self.is_numba_jitted and arr is not None:
             res = self.numba_jit_function(arr)
         else:
             res = self.root.eval(environment)
@@ -152,7 +152,7 @@ class Tree(object):
 
         :return: None
         """
-        self.is_jit_npy = False
+        self.is_numba_jitted = False
         self.root.unmark_bloat()
 
     def mutate(self,
@@ -172,7 +172,7 @@ class Tree(object):
             if random_sample() < p:
                 # mutate the node
                 node.mutate(self.creation_variables)
-                self.is_jit_npy = False
+                self.is_numba_jitted = False
 
             work_list.extend(node.children)
 
@@ -187,7 +187,7 @@ class Tree(object):
         :param headers: Name of the columns.
         :return: None
         """
-        if self.is_jit_npy:
+        if self.is_numba_jitted:
             return
 
         # generate source code
@@ -200,7 +200,7 @@ class Tree(object):
         # Running the executable code, this loads npy_jit_eval into pythons global runtime... i think...
         exec(code, globals(), local_variables)
 
-        self.is_jit_npy = True
+        self.is_numba_jitted = True
         self.numba_jit_function = local_variables['npy_jit_eval']
 
     def get_all_nodes(self,
@@ -267,8 +267,8 @@ def recombine_trees(tree_1: 'Tree',
     :param tree_1: The first tree.
     :param tree_2: The second tree.
     """
-    tree_1.is_jit_npy = False
-    tree_2.is_jit_npy = False
+    tree_1.is_numba_jitted = False
+    tree_2.is_numba_jitted = False
 
     # choose uniformly which node type we will swap
     node_type = random.choice(all_branch_nodes)
