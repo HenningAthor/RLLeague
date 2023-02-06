@@ -3,14 +3,10 @@ Implements the agent.
 """
 import os
 import pickle
-import _pickle as cPickle
-import random
 from typing import Dict, Union, Tuple, List
 
 import numpy as np
-from numba import njit
 
-from agent.nodes import all_branch_nodes, recombine_nodes
 from agent.tree import Tree, recombine_trees
 from agent.util import scale_discrete
 
