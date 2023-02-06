@@ -13,14 +13,14 @@ import time
 import numpy as np
 
 from agent.agent import recombine_agents, Agent, recombine_agents_by_tree
-from recorded_data.data_util import load_match, split_data, load_min_max_csv, scale_with_min_max, load_all_parquet_paths, concat_multiple_datasets, generate_env_stats, generate_env
+from recorded_data.data_util import load_match, split_data, load_min_max_csv, scale_with_min_max, load_all_parquet_paths, concat_multiple_datasets, generate_env_stats, generate_env, load_all_silver_parquet_paths
 
 if __name__ == '__main__':
     np.set_printoptions(precision=4)
 
     # load data
-    n_data = 10
-    file_list = load_all_parquet_paths()
+    n_data = 2
+    file_list = load_all_silver_parquet_paths()
     list_game_data = []
     list_headers = []
     for i in range(n_data):
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     env_stats = generate_env_stats(env_variables, min_max_data, min_max_headers)
     print(features.shape)
 
-    mutate_probabilities = [0.001, 0.01, 0.05, 0.1, 0.25, 0.5]
+    mutate_probabilities = [0.001, 0.01, 0.05, 0.1]
     recombine_probabilities = [0.01, 0.125, 0.5]
     tree_sizes = [(2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
 
         print(mutate_p, recombine_p, min_tree_size, max_tree_size)
         # set parameters
-        n_epochs = 100
+        n_epochs = 50
         n_agents = 100
         errors = np.zeros((n_agents, 8))
         n_nodes_list = np.zeros((n_agents, 8))
@@ -159,7 +159,7 @@ if __name__ == '__main__':
             new_agent_list = []
             # mutate result agent
             t = time.time()
-            for i in range(n_agents // 3):
+            for i in range(int(n_agents * 0.5)):
                 mutated_agent = result_agent.mutate(mutate_p)
                 new_agent_list.append(mutated_agent)
             print('Mutation', np.array([time.time() - t]), end=' ')
@@ -171,7 +171,7 @@ if __name__ == '__main__':
 
             # recombine the best agents
             t = time.time()
-            for i in range(n_agents // 6):
+            for i in range(int(n_agents * 0.2)):
                 agent_1 = np.random.choice(agent_list)
                 agent_2 = np.random.choice(agent_list)
                 rec_agent_1, rec_agent_2 = recombine_agents(agent_1, agent_2, recombine_p)
