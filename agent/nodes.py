@@ -178,10 +178,14 @@ class Node(object):
         # delete self
         del self
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -258,10 +262,14 @@ class ArithmeticNode(Node):
         """
         raise NotImplementedError
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -322,10 +330,14 @@ class LogicalNode(Node):
         """
         raise NotImplementedError
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -402,10 +414,14 @@ class BinaryLogicalNode(LogicalNode):
         """
         raise NotImplementedError
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -482,10 +498,14 @@ class UnaryLogicalNode(LogicalNode):
         """
         raise NotImplementedError
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -562,10 +582,14 @@ class ComparisonNode(LogicalNode):
         """
         raise NotImplementedError
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
         raise NotImplementedError
@@ -601,10 +625,7 @@ class SumNode(ArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        res = 0.0
-        for child in self.children:
-            res += child.eval(environment)
-        return res
+        return self.children[0].eval(environment) + self.children[1].eval(environment)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -626,14 +647,18 @@ class SumNode(ArithmeticNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} + {src_2})'
 
 
@@ -666,10 +691,7 @@ class ProductNode(ArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        res = 1.0
-        for child in self.children:
-            res *= child.eval(environment)
-        return res
+        return self.children[0].eval(environment) * self.children[1].eval(environment)
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -697,14 +719,18 @@ class ProductNode(ArithmeticNode):
             self.bloat_val = self.bloat_min
             self.bloat_max = self.bloat_min
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} * {src_2})'
 
 
@@ -767,14 +793,18 @@ class AndNode(BinaryLogicalNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} & {src_2})'
 
 
@@ -837,14 +867,18 @@ class OrNode(BinaryLogicalNode):
             self.is_bloat = True
             self.bloat_val = self.bloat_min
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} | {src_2})'
 
 
@@ -915,14 +949,18 @@ class SmallerNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} < {src_2})'
 
 
@@ -993,14 +1031,18 @@ class SmallerEqualNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} <= {src_2})'
 
 
@@ -1081,14 +1123,18 @@ class EqualNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} == {src_2})'
 
 
@@ -1159,14 +1205,18 @@ class GreaterEqualNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} >= {src_2})'
 
 
@@ -1237,14 +1287,18 @@ class GreaterNode(ComparisonNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
         return f'({src_1} > {src_2})'
 
 
@@ -1312,13 +1366,17 @@ class NegationNode(UnaryLogicalNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
         return f'(~{src_1})'
 
 
@@ -1377,13 +1435,17 @@ class IdentityLogicalNode(UnaryLogicalNode):
             self.bloat_min = False
             self.bloat_max = True
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
+        src_1 = self.children[0].numba_jit(env_variables, headers)
         return f'({src_1})'
 
 
@@ -1486,16 +1548,20 @@ class DecisionNode(ArithmeticNode):
         """
         self.children[1], self.children[2] = self.children[2], self.children[1]
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        src_1 = self.children[0].python_npy_jit()
-        src_2 = self.children[1].python_npy_jit()
-        src_3 = self.children[2].python_npy_jit()
-        return f'(({src_1} * {src_2}) + ((1 - {src_1}) * {src_3}))'
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        src_2 = self.children[1].numba_jit(env_variables, headers)
+        src_3 = self.children[2].numba_jit(env_variables, headers)
+        return f'({src_1} * {src_2} + (1 - {src_1}) * {src_3})'
 
 
 class ArithmeticConstantNode(ArithmeticNode):
@@ -1567,13 +1633,17 @@ class ArithmeticConstantNode(ArithmeticNode):
         """
         self.constant = np.random.random_sample()
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        return f'{self.constant}'
+        return f'({self.constant})'
 
 
 class LogicalConstantNode(LogicalNode):
@@ -1645,13 +1715,17 @@ class LogicalConstantNode(LogicalNode):
         """
         self.constant = random_sample() < 0.5
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        return f'{self.constant}'
+        return f'({int(self.constant)})'
 
 
 class ArithmeticParameterNode(ArithmeticNode):
@@ -1723,13 +1797,18 @@ class ArithmeticParameterNode(ArithmeticNode):
         """
         self.parameter = random.choice(env_vars['ARITHMETIC'])
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        return f"env['ARITHMETIC']['{self.parameter}']"
+        idx = headers.index(self.parameter)
+        return f"arr[:, {idx}]"
 
 
 class LogicParameterNode(LogicalNode):
@@ -1801,13 +1880,18 @@ class LogicParameterNode(LogicalNode):
         """
         self.parameter = random.choice(env_vars['LOGIC'])
 
-    def python_npy_jit(self) -> str:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
         """
         Writes python code in a string, so it can be compiled.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: Python code as a string.
         """
-        return f"env['LOGIC']['{self.parameter}']"
+        idx = headers.index(self.parameter)
+        return f"arr[:, {idx}].astype(np.int64)"
 
 
 # available types, nodes, probabilities and information
@@ -1817,9 +1901,7 @@ all_branch_nodes = np.array([SumNode, DecisionNode, AndNode, OrNode, SmallerNode
                              NegationNode, IdentityLogicalNode])
 all_nodes = {
     'BRANCH': {'ARITHMETIC': np.array([SumNode, DecisionNode]),
-               'LOGIC': np.array([AndNode, OrNode, SmallerNode, SmallerEqualNode,
-                                  GreaterEqualNode, GreaterNode, EqualNode,
-                                  NegationNode, IdentityLogicalNode])
+               'LOGIC': np.array([AndNode, OrNode, SmallerNode, GreaterNode, NegationNode, IdentityLogicalNode])
                },
     'LEAF': {'ARITHMETIC': np.array([ArithmeticConstantNode, ArithmeticParameterNode]),
              'LOGIC': np.array([LogicalConstantNode, LogicParameterNode])
@@ -1827,8 +1909,7 @@ all_nodes = {
 }
 all_nodes_p = {
     'BRANCH': {'ARITHMETIC': np.array([0.8, 0.2]),
-               'LOGIC': np.array([0.125, 0.125, 0.125, 0.125, 0.125, 0.125, 0.125,
-                                  0.125, 0.0])
+               'LOGIC': np.array([0.2, 0.2, 0.2, 0.2, 0.2, 0.0])
                },
     'LEAF': {'ARITHMETIC': np.array([0.1, 0.9]),
              'LOGIC': np.array([0.1, 0.9])
@@ -1845,11 +1926,11 @@ all_nodes_info = {Node: {'type': 'UNINITIALIZED', 'children_type': 'UNINITIALIZE
                   ProductNode: {'type': 'ARITHMETIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SumNode], 'expected_num_children': 2},
                   AndNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [OrNode], 'expected_num_children': 2},
                   OrNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [AndNode], 'expected_num_children': 2},
-                  SmallerNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerEqualNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
-                  SmallerEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
-                  EqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
-                  GreaterEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterNode], 'expected_num_children': 2},
-                  GreaterNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterEqualNode], 'expected_num_children': 2},
+                  SmallerNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [GreaterNode], 'expected_num_children': 2},
+                  # SmallerEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, EqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  # EqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, GreaterEqualNode, GreaterNode], 'expected_num_children': 2},
+                  # GreaterEqualNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode, SmallerEqualNode, EqualNode, GreaterNode], 'expected_num_children': 2},
+                  GreaterNode: {'type': 'LOGIC', 'children_type': 'ARITHMETIC', 'similar_nodes': [SmallerNode], 'expected_num_children': 2},
                   NegationNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [IdentityLogicalNode], 'expected_num_children': 1},
                   IdentityLogicalNode: {'type': 'LOGIC', 'children_type': 'LOGIC', 'similar_nodes': [NegationNode], 'expected_num_children': 1},
                   DecisionNode: {'type': 'ARITHMETIC', 'children_type': 'DECISION', 'similar_nodes': [], 'expected_num_children': 3},
