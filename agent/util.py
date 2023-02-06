@@ -26,10 +26,10 @@ def scale_discrete(x: Union[float, np.ndarray],
                    lower: float,
                    upper: float) -> Union[float, np.ndarray]:
     """
-    Transforms inv_w in to the interval [lower, upper]. Then discretize inv_w to the
+    Transforms x in to the interval [lower, upper]. Then discretize x to the
     nearest integer.
 
-    :return: Transformed inv_w
+    :return: Transformed x
     """
     # transform into new interval
     x = ((x - x_min) / (x_max - x_min)) * (upper - lower) + lower
