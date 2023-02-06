@@ -23,6 +23,18 @@ def load_all_parquet_paths() -> List[str]:
     return file_paths
 
 
+def load_all_silver_parquet_paths() -> List[str]:
+    """
+    Returns all .parquet paths found in recorded_data/out and
+    recorded_data/out2.
+
+    :return: List of file paths.
+    """
+    file_paths = []
+    file_paths.extend(list(glob.glob(f"recorded_data/silver_parquet/*.parquet")))
+    return file_paths
+
+
 def load_match(file_path: str,
                columns_to_remove: Union[List[str], None] = None) -> Tuple[np.ndarray, List[str]]:
     """
@@ -275,3 +287,36 @@ def generate_env(env_variables: Dict[str, List[str]],
         env['LOGIC'][key] = np.array(features[:, headers.index(key)], dtype=int)
 
     return env
+
+
+def pre_generate_modules(features: np.ndarray,
+                         headers: List[str]) -> Tuple[np.ndarray, List[str]]:
+    """
+    This function will generate new variables. For example, it will calculate
+    the distance between the ball, player1 and player2. All newly generated
+    variables are appended to the feature array and the header list.
+
+    :param features: Array holding the features.
+    :param headers: Name of the columns.
+    :return: Features + new features, headers + new headers
+    """
+    # calculate distances between all three objects
+    x1, y1, z1 = features[:, headers.index('ball/pos_x')], features[:, headers.index('ball/pos_y')], features[:, headers.index('ball/pos_z')]
+    x2, y2, z2 = features[:, headers.index('player1/pos_x')], features[:, headers.index('player1/pos_y')], features[:, headers.index('player1/pos_z')]
+    x3, y3, z3 = features[:, headers.index('player2/pos_x')], features[:, headers.index('player2/pos_y')], features[:, headers.index('player2/pos_z')]
+    dist_ball_player1 = np.sqrt(np.square(x1 - x2) + np.square(y1 - y2) + np.square(z1 - z2))
+    dist_ball_player2 = np.sqrt(np.square(x1 - x3) + np.square(y1 - y3) + np.square(z1 - z3))
+    dist_player1_player2 = np.sqrt(np.square(x2 - x3) + np.square(y2 - y3) + np.square(z2 - z3))
+
+    # calculate velocity of all objects
+    x1_vel, y1_vel, z1_vel = features[:, headers.index('ball/vel_x')], features[:, headers.index('ball/vel_x')], features[:, headers.index('ball/vel_x')]
+    x2_vel, y2_vel, z2_vel = features[:, headers.index('player1/vel_x')], features[:, headers.index('player1/vel_x')], features[:, headers.index('player1/vel_x')]
+    x3_vel, y3_vel, z3_vel = features[:, headers.index('player2/vel_x')], features[:, headers.index('player2/vel_x')], features[:, headers.index('player2/vel_x')]
+    ball_vel = np.sqrt(np.square(x1_vel) + np.square(y1_vel) + np.square(z1_vel))
+    player1_vel = np.sqrt(np.square(x2_vel) + np.square(y2_vel) + np.square(z2_vel))
+    player2_vel = np.sqrt(np.square(x3_vel) + np.square(y3_vel) + np.square(z3_vel))
+
+    np.hstack((features, dist_ball_player1, dist_ball_player2, dist_player1_player2, ball_vel, player1_vel, player2_vel))
+    headers.extend(['dist_ball_player1', 'dist_ball_player2', 'dist_player1_player2', 'ball_vel', 'player1_vel', 'player2_vel'])
+
+    return features, headers
