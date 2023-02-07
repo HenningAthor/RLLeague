@@ -144,7 +144,7 @@ def generate_single_plots():
 
 def combine_plots():
     tree_names = ['Throttle', 'Steer', 'Pitch', 'Yaw', 'Roll', 'Jump', 'Boost', 'Handbrake']
-    mutate_probabilities = [0.001, 0.01, 0.05, 0.1, 0.25, 0.5]
+    mutate_probabilities = [0.001, 0.01, 0.05, 0.1]
     recombine_probabilities = [0.01, 0.125, 0.5]
     tree_sizes = [(2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]
 
