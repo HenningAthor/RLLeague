@@ -20,6 +20,7 @@ from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
 from stable_baselines3.ppo import PPO
 
 from league.reward_functions import league_reward_functions
+from recorded_data.data_util import load_min_max_csv, state_to_feature_vector, scale_with_min_max, get_headers_for_feature_vector
 
 
 def reward_movement(idx: int, state: GameState):
@@ -83,6 +84,7 @@ class RLLeagueAction(ContinuousAction):
         Initializes an ActionParser which controls agents with id1 and id2.
         """
         super().__init__()
+
         self.action_id = action_id
         self.initialized = False
         self.league_id = -1
@@ -90,6 +92,9 @@ class RLLeagueAction(ContinuousAction):
         self.id_2 = -1
         self.agent_1 = None
         self.agent_2 = None
+
+        self.feature_header = get_headers_for_feature_vector()
+        self.min_max_data, self.min_max_headers = load_min_max_csv()
 
         self.state_history = []
         self.rew_1 = 0.0
@@ -127,8 +132,8 @@ class RLLeagueAction(ContinuousAction):
             if self.verbose: print(f"RLLeagueAction {self.action_id}: Loaded Agent {self.id_1} and {self.id_2} in League {self.league_id} (Default)")
             return
 
-        path_1 = f"bot_storage/bot_{self.id_1}/bot_{self.id_1}.pickle"
-        path_2 = f"bot_storage/bot_{self.id_2}/bot_{self.id_2}.pickle"
+        path_1 = f"agent_storage/agent_{self.id_1}/agent_{self.id_1}.pickle"
+        path_2 = f"agent_storage/agent_{self.id_2}/agent_{self.id_2}.pickle"
         assert os.path.exists(path_1)
         assert os.path.exists(path_2)
 
@@ -147,91 +152,117 @@ class RLLeagueAction(ContinuousAction):
         if not self.initialized:
             return np.zeros(actions.shape)
 
-        self.rew_1 += self.step_reward_func(0, state)
-        self.rew_2 += self.step_reward_func(1, state)
+        features = state_to_feature_vector(state)
+        features = scale_with_min_max(features, self.feature_header, self.min_max_data, self.min_max_headers)
 
-        env_1 = {'ARITHMETIC': {'my_car_x': state.players[0].inverted_car_data.position[0],
-                                'my_car_y': state.players[0].inverted_car_data.position[1],
-                                'my_car_z': state.players[0].inverted_car_data.position[2],
-                                'my_car_velocity_x': state.players[0].inverted_car_data.linear_velocity[0],
-                                'my_car_velocity_y': state.players[0].inverted_car_data.linear_velocity[1],
-                                'my_car_velocity_z': state.players[0].inverted_car_data.linear_velocity[2],
-                                'my_car_rotation_yaw': state.players[0].inverted_car_data.angular_velocity[0],
-                                'my_car_rotation_pitch': state.players[0].inverted_car_data.angular_velocity[1],
-                                'my_car_rotation_roll': state.players[0].inverted_car_data.angular_velocity[2],
-                                'enemy_car_x': state.players[1].inverted_car_data.position[0],
-                                'enemy_car_y': state.players[1].inverted_car_data.position[1],
-                                'enemy_car_z': state.players[1].inverted_car_data.position[2],
-                                'enemy_car_velocity_x': state.players[1].inverted_car_data.linear_velocity[0],
-                                'enemy_car_velocity_y': state.players[1].inverted_car_data.linear_velocity[1],
-                                'enemy_car_velocity_z': state.players[1].inverted_car_data.linear_velocity[2],
-                                'enemy_car_rotation_yaw': state.players[1].inverted_car_data.angular_velocity[0],
-                                'enemy_car_rotation_pitch': state.players[1].inverted_car_data.angular_velocity[1],
-                                'enemy_car_rotation_roll': state.players[1].inverted_car_data.angular_velocity[2],
-                                'ball_x': state.inverted_ball.position[0],
-                                'ball_y': state.inverted_ball.position[1],
-                                'ball_z': state.inverted_ball.position[2],
-                                'ball_velocity_x': state.inverted_ball.linear_velocity[0],
-                                'ball_velocity_y': state.inverted_ball.linear_velocity[1],
-                                'ball_velocity_z': state.inverted_ball.linear_velocity[2],
-                                'ball_rotation_yaw': state.inverted_ball.angular_velocity[0],
-                                'ball_rotation_pitch': state.inverted_ball.angular_velocity[1],
-                                'ball_rotation_roll': state.inverted_ball.angular_velocity[2],
-                                'my_team_score': state.blue_score,
-                                'enemy_team_score': state.orange_score,
-                                'remaining_time': 100},
+        r1 = self.step_reward_func(0, state)
+        r2 = self.step_reward_func(1, state)
 
-                 'LOGIC': {'kickoff': False,
-                           'overtime': False}
+        self.rew_1 += r1
+        self.rew_2 += r2
+
+        # player 1 has index 0, player 2 has index 1
+        env_1 = {'ARITHMETIC': {'ball/pos_x': features[0, self.feature_header.index('ball/pos_x')],
+                                'ball/pos_y': features[0, self.feature_header.index('ball/pos_y')],
+                                'ball/pos_z': features[0, self.feature_header.index('ball/pos_z')],
+                                'ball/vel_x': features[0, self.feature_header.index('ball/vel_x')],
+                                'ball/vel_y': features[0, self.feature_header.index('ball/vel_y')],
+                                'ball/vel_z': features[0, self.feature_header.index('ball/vel_z')],
+                                'ball/ang_vel_x': features[0, self.feature_header.index('ball/ang_vel_x')],
+                                'ball/ang_vel_y': features[0, self.feature_header.index('ball/ang_vel_y')],
+                                'ball/ang_vel_z': features[0, self.feature_header.index('ball/ang_vel_z')],
+                                'player1/pos_x': features[0, self.feature_header.index('player1/pos_x')],
+                                'player1/pos_y': features[0, self.feature_header.index('player1/pos_y')],
+                                'player1/pos_z': features[0, self.feature_header.index('player1/pos_z')],
+                                'player1/vel_x': features[0, self.feature_header.index('player1/vel_x')],
+                                'player1/vel_y': features[0, self.feature_header.index('player1/vel_y')],
+                                'player1/vel_z': features[0, self.feature_header.index('player1/vel_z')],
+                                'player1/ang_vel_x': features[0, self.feature_header.index('player1/ang_vel_x')],
+                                'player1/ang_vel_y': features[0, self.feature_header.index('player1/ang_vel_y')],
+                                'player1/ang_vel_z': features[0, self.feature_header.index('player1/ang_vel_z')],
+                                'player1/quat_w': features[0, self.feature_header.index('player1/quat_w')],
+                                'player1/quat_x': features[0, self.feature_header.index('player1/quat_x')],
+                                'player1/quat_y': features[0, self.feature_header.index('player1/quat_y')],
+                                'player1/quat_z': features[0, self.feature_header.index('player1/quat_z')],
+                                'inverted_player2/pos_x': features[0, self.feature_header.index('inverted_player2/pos_x')],
+                                'inverted_player2/pos_y': features[0, self.feature_header.index('inverted_player2/pos_y')],
+                                'inverted_player2/pos_z': features[0, self.feature_header.index('inverted_player2/pos_z')],
+                                'inverted_player2/vel_x': features[0, self.feature_header.index('inverted_player2/vel_x')],
+                                'inverted_player2/vel_y': features[0, self.feature_header.index('inverted_player2/vel_y')],
+                                'inverted_player2/vel_z': features[0, self.feature_header.index('inverted_player2/vel_z')],
+                                'inverted_player2/ang_vel_x': features[0, self.feature_header.index('inverted_player2/ang_vel_x')],
+                                'inverted_player2/ang_vel_y': features[0, self.feature_header.index('inverted_player2/ang_vel_y')],
+                                'inverted_player2/ang_vel_z': features[0, self.feature_header.index('inverted_player2/ang_vel_z')],
+                                'inverted_player2/quat_w': features[0, self.feature_header.index('inverted_player2/quat_w')],
+                                'inverted_player2/quat_x': features[0, self.feature_header.index('inverted_player2/quat_x')],
+                                'inverted_player2/quat_y': features[0, self.feature_header.index('inverted_player2/quat_y')],
+                                'inverted_player2/quat_z': features[0, self.feature_header.index('inverted_player2/quat_z')],
+                                'player1/boost_amount': features[0, self.feature_header.index('player1/boost_amount')],
+                                'player2/boost_amount': features[0, self.feature_header.index('player2/boost_amount')]
+                                },
+                 'LOGIC': {'player1/on_ground': features[0, self.feature_header.index('player1/on_ground')],
+                           'player1/ball_touched': features[0, self.feature_header.index('player1/ball_touched')],
+                           'player1/has_jump': features[0, self.feature_header.index('player1/has_jump')],
+                           'player1/has_flip': features[0, self.feature_header.index('player1/has_flip')],
+                           'player2/on_ground': features[0, self.feature_header.index('player2/on_ground')],
+                           'player2/ball_touched': features[0, self.feature_header.index('player2/ball_touched')],
+                           'player2/has_jump': features[0, self.feature_header.index('player2/has_jump')],
+                           'player2/has_flip': features[0, self.feature_header.index('player2/has_flip')]
+                           }
                  }
 
-        env_2 = {'ARITHMETIC': {'my_car_x': state.players[1].inverted_car_data.position[0],
-                                'my_car_y': state.players[1].inverted_car_data.position[1],
-                                'my_car_z': state.players[1].inverted_car_data.position[2],
-                                'my_car_velocity_x': state.players[1].inverted_car_data.linear_velocity[0],
-                                'my_car_velocity_y': state.players[1].inverted_car_data.linear_velocity[1],
-                                'my_car_velocity_z': state.players[1].inverted_car_data.linear_velocity[2],
-                                'my_car_rotation_yaw': state.players[1].inverted_car_data.angular_velocity[0],
-                                'my_car_rotation_pitch': state.players[1].inverted_car_data.angular_velocity[1],
-                                'my_car_rotation_roll': state.players[1].inverted_car_data.angular_velocity[2],
-                                'enemy_car_x': state.players[0].inverted_car_data.position[0],
-                                'enemy_car_y': state.players[0].inverted_car_data.position[1],
-                                'enemy_car_z': state.players[0].inverted_car_data.position[2],
-                                'enemy_car_velocity_x': state.players[0].inverted_car_data.linear_velocity[0],
-                                'enemy_car_velocity_y': state.players[0].inverted_car_data.linear_velocity[1],
-                                'enemy_car_velocity_z': state.players[0].inverted_car_data.linear_velocity[2],
-                                'enemy_car_rotation_yaw': state.players[0].inverted_car_data.angular_velocity[0],
-                                'enemy_car_rotation_pitch': state.players[0].inverted_car_data.angular_velocity[1],
-                                'enemy_car_rotation_roll': state.players[0].inverted_car_data.angular_velocity[2],
-                                'ball_x': state.inverted_ball.position[0],
-                                'ball_y': state.inverted_ball.position[1],
-                                'ball_z': state.inverted_ball.position[2],
-                                'ball_velocity_x': state.inverted_ball.linear_velocity[0],
-                                'ball_velocity_y': state.inverted_ball.linear_velocity[1],
-                                'ball_velocity_z': state.inverted_ball.linear_velocity[2],
-                                'ball_rotation_yaw': state.inverted_ball.angular_velocity[0],
-                                'ball_rotation_pitch': state.inverted_ball.angular_velocity[1],
-                                'ball_rotation_roll': state.inverted_ball.angular_velocity[2],
-                                'my_team_score': state.blue_score,
-                                'enemy_team_score': state.orange_score,
-                                'remaining_time': 100},
-
-                 'LOGIC': {'kickoff': False,
-                           'overtime': False}
+        # player 1 has index 1, player 2 has index 0
+        env_2 = {'ARITHMETIC': {'ball/pos_x': features[0, self.feature_header.index('inverted_ball/pos_x')],
+                                'ball/pos_y': features[0, self.feature_header.index('inverted_ball/pos_y')],
+                                'ball/pos_z': features[0, self.feature_header.index('inverted_ball/pos_z')],
+                                'ball/vel_x': features[0, self.feature_header.index('inverted_ball/vel_x')],
+                                'ball/vel_y': features[0, self.feature_header.index('inverted_ball/vel_y')],
+                                'ball/vel_z': features[0, self.feature_header.index('inverted_ball/vel_z')],
+                                'ball/ang_vel_x': features[0, self.feature_header.index('inverted_ball/ang_vel_x')],
+                                'ball/ang_vel_y': features[0, self.feature_header.index('inverted_ball/ang_vel_y')],
+                                'ball/ang_vel_z': features[0, self.feature_header.index('inverted_ball/ang_vel_z')],
+                                'player1/pos_x': features[0, self.feature_header.index('inverted_player2/pos_x')],
+                                'player1/pos_y': features[0, self.feature_header.index('inverted_player2/pos_y')],
+                                'player1/pos_z': features[0, self.feature_header.index('inverted_player2/pos_z')],
+                                'player1/vel_x': features[0, self.feature_header.index('inverted_player2/vel_x')],
+                                'player1/vel_y': features[0, self.feature_header.index('inverted_player2/vel_y')],
+                                'player1/vel_z': features[0, self.feature_header.index('inverted_player2/vel_z')],
+                                'player1/ang_vel_x': features[0, self.feature_header.index('inverted_player2/ang_vel_x')],
+                                'player1/ang_vel_y': features[0, self.feature_header.index('inverted_player2/ang_vel_y')],
+                                'player1/ang_vel_z': features[0, self.feature_header.index('inverted_player2/ang_vel_z')],
+                                'player1/quat_w': features[0, self.feature_header.index('inverted_player2/quat_w')],
+                                'player1/quat_x': features[0, self.feature_header.index('inverted_player2/quat_x')],
+                                'player1/quat_y': features[0, self.feature_header.index('inverted_player2/quat_y')],
+                                'player1/quat_z': features[0, self.feature_header.index('inverted_player2/quat_z')],
+                                'inverted_player2/pos_x': features[0, self.feature_header.index('player1/pos_x')],
+                                'inverted_player2/pos_y': features[0, self.feature_header.index('player1/pos_y')],
+                                'inverted_player2/pos_z': features[0, self.feature_header.index('player1/pos_z')],
+                                'inverted_player2/vel_x': features[0, self.feature_header.index('player1/vel_x')],
+                                'inverted_player2/vel_y': features[0, self.feature_header.index('player1/vel_y')],
+                                'inverted_player2/vel_z': features[0, self.feature_header.index('player1/vel_z')],
+                                'inverted_player2/ang_vel_x': features[0, self.feature_header.index('player1/ang_vel_x')],
+                                'inverted_player2/ang_vel_y': features[0, self.feature_header.index('player1/ang_vel_y')],
+                                'inverted_player2/ang_vel_z': features[0, self.feature_header.index('player1/ang_vel_z')],
+                                'inverted_player2/quat_w': features[0, self.feature_header.index('player1/quat_w')],
+                                'inverted_player2/quat_x': features[0, self.feature_header.index('player1/quat_x')],
+                                'inverted_player2/quat_y': features[0, self.feature_header.index('player1/quat_y')],
+                                'inverted_player2/quat_z': features[0, self.feature_header.index('player1/quat_z')],
+                                'player1/boost_amount': features[0, self.feature_header.index('player2/boost_amount')],
+                                'player2/boost_amount': features[0, self.feature_header.index('player1/boost_amount')]
+                                },
+                 'LOGIC': {'player1/on_ground': features[0, self.feature_header.index('player2/on_ground')],
+                           'player1/ball_touched': features[0, self.feature_header.index('player2/ball_touched')],
+                           'player1/has_jump': features[0, self.feature_header.index('player2/has_jump')],
+                           'player1/has_flip': features[0, self.feature_header.index('player2/has_flip')],
+                           'player2/on_ground': features[0, self.feature_header.index('player1/on_ground')],
+                           'player2/ball_touched': features[0, self.feature_header.index('player1/ball_touched')],
+                           'player2/has_jump': features[0, self.feature_header.index('player1/has_jump')],
+                           'player2/has_flip': features[0, self.feature_header.index('player1/has_flip')]}
                  }
 
         actions = np.zeros(actions.shape)
-        actions[0][0] = self.agent_1.eval_throttle(env_1)
-        actions[0][1] = self.agent_1.eval_steering(env_1)
-        actions[0][5] = int(self.agent_1.eval_jump(env_1) > 0)
-        actions[0][6] = int(self.agent_1.eval_boost(env_1) > 0)
-        actions[0][7] = int(self.agent_1.eval_handbrake(env_1) > 0)
-
-        actions[1][0] = self.agent_2.eval_throttle(env_2)
-        actions[1][1] = self.agent_2.eval_steering(env_2)
-        actions[1][5] = int(self.agent_2.eval_jump(env_2) > 0)
-        actions[1][6] = int(self.agent_2.eval_boost(env_2) > 0)
-        actions[1][7] = int(self.agent_2.eval_handbrake(env_2) > 0)
+        actions[0] = self.agent_1.eval_all(env_1)
+        actions[1] = self.agent_2.eval_all(env_2)
 
         self.state_history.append(state)
 
@@ -262,12 +293,13 @@ class RLLeagueAction(ContinuousAction):
 
 
 class MatchScheduler(object):
-    def __init__(self, n_instances, wait_time=20, minimize_windows=True, verbose=False, rlgym_verbose=False) -> None:
+    def __init__(self, n_instances, wait_time=20, game_speed=100, minimize_windows=True, verbose=False, rlgym_verbose=False) -> None:
         """
         Initializes the MatchScheduler.
 
         :param n_instances: Number of instances, that should be executed simultaneously.
         :param wait_time: How long to wait before opening another rl window.
+        :param game_speed: Speed of the game.
         :param minimize_windows: If the Rocket League windows should be minimized.
         :param verbose: If the class should print information.
         :param rlgym_verbose: If rlgym should print (not everything can be disabled).
@@ -293,7 +325,7 @@ class MatchScheduler(object):
                 obs_builder=DefaultObs(),
                 action_parser=action,
                 state_setter=state,
-                game_speed=100,
+                game_speed=game_speed,
                 spawn_opponents=True)
 
             self.rl_actions.append(action)
