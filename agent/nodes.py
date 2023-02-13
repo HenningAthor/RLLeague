@@ -763,10 +763,12 @@ class AndNode(BinaryLogicalNode):
         if self.is_bloat:
             return self.bloat_val
 
-        res = True
-        for child in self.children:
-            res = res & child.eval(environment)
-        return res
+        r1 = self.children[0].eval(environment)
+        r2 = self.children[0].eval(environment)
+
+        if (r1 == 1.0 or r1 == 1 or r1 is True) and (r2 == 1.0 or r2 == 1 or r2 is True):
+            return True
+        return False
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -837,10 +839,12 @@ class OrNode(BinaryLogicalNode):
         if self.is_bloat:
             return self.bloat_val
 
-        res = False
-        for child in self.children:
-            res = res | child.eval(environment)
-        return res
+        r1 = self.children[0].eval(environment)
+        r2 = self.children[0].eval(environment)
+
+        if (r1 == 1.0 or r1 == 1 or r1 is True) or (r2 == 1.0 or r2 == 1 or r2 is True):
+            return True
+        return False
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
