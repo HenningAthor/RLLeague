@@ -50,10 +50,6 @@ if __name__ == '__main__':
                                     'player1/vel_x',
                                     'player1/vel_y',
                                     'player1/vel_z',
-                                    'player1/quat_w',
-                                    'player1/quat_x',
-                                    'player1/quat_y',
-                                    'player1/quat_z',
                                     'player1/ang_vel_x',
                                     'player1/ang_vel_y',
                                     'player1/ang_vel_z',
@@ -64,10 +60,6 @@ if __name__ == '__main__':
                                     'inverted_player2/vel_x',
                                     'inverted_player2/vel_y',
                                     'inverted_player2/vel_z',
-                                    'inverted_player2/quat_w',
-                                    'inverted_player2/quat_x',
-                                    'inverted_player2/quat_y',
-                                    'inverted_player2/quat_z',
                                     'inverted_player2/ang_vel_x',
                                     'inverted_player2/ang_vel_y',
                                     'inverted_player2/ang_vel_z',
@@ -86,9 +78,13 @@ if __name__ == '__main__':
     env_stats = generate_env_stats(env_variables, min_max_data, min_max_headers)
     print(features.shape)
 
+    for i in range(8):
+        print(np.unique(player1[:, i], return_counts=True))
+
     mutate_probabilities = [0.001, 0.01, 0.05, 0.1]
     recombine_probabilities = [0.01, 0.125, 0.5]
-    tree_sizes = [(2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]
+    # tree_sizes = [(2, 3), (3, 4), (4, 5), (5, 6), (6, 7)]
+    tree_sizes = [(6, 7)]
 
     for mutate_p, recombine_p, (min_tree_size, max_tree_size) in itertools.product(mutate_probabilities, recombine_probabilities, tree_sizes):
 
