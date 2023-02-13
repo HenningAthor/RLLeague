@@ -1,10 +1,10 @@
 """
-Script to analyze the downloaded_matches. It will determine the min and max value
+Script to analyze the downloaded matches. It will determine the min and max value
 for each column over all matches. This information can help with determining
 bloat in the evolution trees.
 The result will be printed in the min_max.csv file and saved in recorded_data.
 The first row are the max values and the second row are the min values.
-The script needs about 4 hours to complete.
+The script needs about 30 min to complete.
 """
 import numpy as np
 from tqdm import tqdm
