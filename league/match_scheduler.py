@@ -28,10 +28,10 @@ def reward_movement(idx: int, state: GameState):
 
 
 class RLLeagueState(StateSetter):
-    SPAWN_BLUE_POS = [[-2048, -2560, 17], [2048, -2560, 17], [-256, -3840, 17], [256, -3840, 17], [0, -4608, 17]]
-    SPAWN_BLUE_YAW = [0.25 * np.pi, 0.75 * np.pi, 0.5 * np.pi, 0.5 * np.pi, 0.5 * np.pi]
-    SPAWN_ORANGE_POS = [[2048, 2560, 17], [-2048, 2560, 17], [256, 3840, 17], [-256, 3840, 17], [0, 4608, 17]]
-    SPAWN_ORANGE_YAW = [-0.75 * np.pi, -0.25 * np.pi, -0.5 * np.pi, -0.5 * np.pi, -0.5 * np.pi]
+    SPAWN_BLUE_POS = [[0, -4608, 17]]
+    SPAWN_BLUE_YAW = [0.5 * np.pi]
+    SPAWN_ORANGE_POS = [[0, 4608, 17]]
+    SPAWN_ORANGE_YAW = [-0.5 * np.pi]
 
     def __init__(self, rl_league_action: 'RLLeagueAction', verbose=False):
         super().__init__()
@@ -48,7 +48,7 @@ class RLLeagueState(StateSetter):
         self.rl_league_action.save_match_report()
         self.rl_league_action.load_match_from_file()
         # possible kickoff indices are shuffled
-        spawn_inds = [0, 1, 2, 3, 4]
+        spawn_inds = [0]
         random.shuffle(spawn_inds)
 
         blue_count = 0
@@ -284,12 +284,13 @@ class RLLeagueAction(ContinuousAction):
             f = open(file_name, "w")
             f.write(f"{self.rew_1}\n{self.rew_2}")
             f.close()
-            self.rew_1 = 0.0
-            self.rew_2 = 0.0
 
-            if self.verbose: print(f"RLLeagueAction {self.action_id}: Writing game report for agent {self.agent_1.agent_id} and {self.agent_2.agent_id} in league {self.league_id}")
+            if self.verbose: print(f"RLLeagueAction {self.action_id}: Writing game report for agent {self.agent_1.agent_id} ({self.rew_1}) and {self.agent_2.agent_id} ({self.rew_2}) in league {self.league_id}")
         else:
             if self.verbose: print(f"RLLeagueAction {self.action_id}: Not initialized, no game report written!")
+
+        self.rew_1 = 0.0
+        self.rew_2 = 0.0
 
 
 class MatchScheduler(object):
