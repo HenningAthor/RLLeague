@@ -11,6 +11,7 @@ import pandas as pd
 from typing import List
 from itertools import product
 import numpy as np
+from recorded_data.data_util import load_min_max_csv, scale_with_min_max_1d
 
 """
 Implementation from: https://medium.com/pytorch/implementing-an-autoencoder-in-pytorch-19baa22647d1
@@ -60,6 +61,7 @@ class RocketLeagueDataset(IterableDataset):
         self.path = path
         self.half_count = half_count
         self.x = 0
+        self.min_max_data, self.min_max_header = load_min_max_csv()
 
     def extract_information(self, row : pd.Series, ids : List[str], inverted : bool):
         player1 = 'inverted_' + ids[1] if inverted else ids[0]
@@ -69,7 +71,9 @@ class RocketLeagueDataset(IterableDataset):
         data_of_interest1 = [player1, player2, ball]
         data_of_interest2 = ['/pos_x', '/pos_y', '/pos_z', '/vel_x', '/vel_y', '/vel_z']
 
-        return row[string_product('', data_of_interest1, data_of_interest2)].to_numpy(dtype=np.float32)
+        header = string_product('', ['player1', 'player2', 'ball'], data_of_interest2)
+        data = row[string_product('', data_of_interest1, data_of_interest2)].to_numpy(dtype=np.float32)
+        return scale_with_min_max_1d(data, header, self.min_max_data, self.min_max_header)
         
 
     
@@ -155,7 +159,7 @@ def learn_rl(path : str = 'ae_data', epochs: int = 1000):
 
     # create a model from `AE` autoencoder class
     # load it to the specified device, either gpu or cpu
-    model = AE(input_size= RocketLeagueDataset.INPUT_SIZE, hidden_size=5).to(device)
+    model = AE(input_size= RocketLeagueDataset.INPUT_SIZE, hidden_size=1).to(device)
 
     # create an optimizer object
     # Adam optimizer with learning rate 1e-3
@@ -166,7 +170,7 @@ def learn_rl(path : str = 'ae_data', epochs: int = 1000):
 
     transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
     train_dataset = RocketLeagueDataset(path)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=128, num_workers=1, pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=512, num_workers=1, pin_memory=True)
 
     for epoch in range(epochs):
         loss = 0

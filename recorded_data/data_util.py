@@ -193,6 +193,31 @@ def scale_with_min_max(features: np.ndarray,
 
     return features
 
+def scale_with_min_max_1d(features: np.ndarray,
+                          features_header: List[str],
+                          min_max: np.ndarray,
+                          min_max_header: List[str]) -> np.ndarray:
+    """
+    Scales the features with the min-max data into the range of [0, 1].
+
+    :param features: Array holding un-normalized data.
+    :param features_header: List containing the name of each feature column.
+    :param min_max: Array holding the min-max data.
+    :param min_max_header: List containing the name of each min-max column.
+    :return: Normalized features.
+    """
+    for i, name in enumerate(features_header):
+        idx = min_max_header.index(name)  # get index in min-max data
+        min_val, max_val = min_max[1][idx], min_max[0][idx]
+
+        # scale into [0, 1]
+        features[i] = (features[i] - min_val) / (max_val - min_val)
+
+        assert np.all((features[i] >= 0.0))
+        assert np.all((features[i] <= 1.0))
+
+    return features
+
 
 def reorder_columns(game_data: np.ndarray,
                     headers: List[str],
