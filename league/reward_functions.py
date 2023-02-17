@@ -393,15 +393,14 @@ def goal_scored_reward(agent_idx: int, state: GameState, state_history: List[Gam
     :return: reward in range [0.0, 1.0]
     """
 
-    player_score = None
-    prev_player_score = None
+    prev_player_score = 0
+    if state_history is not None:
+        prev_player_score = state_history[-1].blue_score
 
     if agent_idx == 0:
         player_score = state.blue_score
-        prev_player_score = state_history[-1].blue_score
-    elif agent_idx == 1:
+    else:
         player_score = state.orange_score
-        prev_player_score = state_history[-1].orange_score
 
     if player_score > prev_player_score:
         ball_velocity = velocity_ball_to_goal_step_reward(agent_idx, state)
@@ -517,22 +516,23 @@ def league_1_step_reward(agent_idx: int, state: GameState, state_history: List[G
     step_rew = 0.0
     # step_rew += boost_amount_step_reward(agent_idx, state, state_history)
     # step_rew += boost_difference_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * ball_touched_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * ball_touched_step_reward(agent_idx, state, state_history)
     # step_rew += demo_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * distance_player_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * facing_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * align_ball_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * closest_to_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * touched_ball_last_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * behind_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * behind_ball_step_reward(agent_idx, state, state_history)
     # step_rew += velocity_player_to_ball_step_reward(agent_idx, state, state_history)
     # step_rew += velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * velocity_player_step_reward(agent_idx, state, state_history)
-    step_rew += 0.1 * forward_velocity_step_reward(agent_idx, state, state_history)
+    step_rew += 1.0 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * forward_velocity_step_reward(agent_idx, state, state_history)
     # step_rew += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
     # step_rew += velocity_ball_step_reward(agent_idx, state, state_history)
 
+    return step_rew
     return constant_rew + kickoff_rew + goal_scored_rew + step_rew
 
 
@@ -553,22 +553,23 @@ def league_2_step_reward(agent_idx: int, state: GameState, state_history: List[G
     step_rew = 0.0
     # step_rew += boost_amount_step_reward(agent_idx, state, state_history)
     # step_rew += boost_difference_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * ball_touched_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * ball_touched_step_reward(agent_idx, state, state_history)
     # step_rew += demo_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * distance_player_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * facing_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * align_ball_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * closest_to_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * touched_ball_last_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * behind_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * velocity_player_to_ball_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * velocity_player_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * forward_velocity_step_reward(agent_idx, state, state_history)
+    step_rew += 0.5 * distance_player_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * distance_ball_enemy_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * facing_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * align_ball_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * closest_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * touched_ball_last_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * behind_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * velocity_player_to_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * velocity_ball_to_goal_step_reward(agent_idx, state, state_history)
+    step_rew += 0.5 * velocity_player_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * forward_velocity_step_reward(agent_idx, state, state_history)
     # step_rew += distance_ball_to_own_backwall_step_reward(agent_idx, state, state_history)
-    step_rew += 0.077 * velocity_ball_step_reward(agent_idx, state, state_history)
+    step_rew += 0.0 * velocity_ball_step_reward(agent_idx, state, state_history)
 
+    return step_rew
     return constant_rew + kickoff_rew + goal_scored_rew + step_rew
 
 

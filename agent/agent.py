@@ -1,16 +1,13 @@
 """
 Implements the agent.
 """
+import multiprocessing
 import os
 import pickle
-import _pickle as cPickle
-import random
 from typing import Dict, Union, Tuple, List
 
 import numpy as np
-from numba import njit
 
-from agent.nodes import all_branch_nodes, recombine_nodes
 from agent.tree import Tree, recombine_trees
 from agent.util import scale_discrete
 
@@ -33,20 +30,20 @@ class Agent(object):
         if not min_depth == max_depth == -1:
             # 0 - throttle, 1 - steer, 2 - pitch, 3 - yaw
             # 4 - roll, 5 - jump, 6 - boost, 7 - handbrake
-            self.tree_list: List[Tree] = [Tree(min_depth, max_depth, env_vars, -1.0, 1.0, True),
-                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, True),
-                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, True),
-                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, True),
-                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, True),
+            self.tree_list: List[Tree] = [Tree(min_depth, max_depth, env_vars, -1.0, 1.0, False),
+                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, False),
+                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, False),
+                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, False),
+                                          Tree(min_depth, max_depth, env_vars, -1.0, 1.0, False),
                                           Tree(min_depth, max_depth, env_vars, 0.0, 1.0, True),
                                           Tree(min_depth, max_depth, env_vars, 0.0, 1.0, True),
                                           Tree(min_depth, max_depth, env_vars, 0.0, 1.0, True)]
         else:
-            self.tree_list: List[Tree] = [Tree(-1, -1, env_vars, -1.0, 1.0, True),
-                                          Tree(-1, -1, env_vars, -1.0, 1.0, True),
-                                          Tree(-1, -1, env_vars, -1.0, 1.0, True),
-                                          Tree(-1, -1, env_vars, -1.0, 1.0, True),
-                                          Tree(-1, -1, env_vars, -1.0, 1.0, True),
+            self.tree_list: List[Tree] = [Tree(-1, -1, env_vars, -1.0, 1.0, False),
+                                          Tree(-1, -1, env_vars, -1.0, 1.0, False),
+                                          Tree(-1, -1, env_vars, -1.0, 1.0, False),
+                                          Tree(-1, -1, env_vars, -1.0, 1.0, False),
+                                          Tree(-1, -1, env_vars, -1.0, 1.0, False),
                                           Tree(-1, -1, env_vars, 0.0, 1.0, True),
                                           Tree(-1, -1, env_vars, 0.0, 1.0, True),
                                           Tree(-1, -1, env_vars, 0.0, 1.0, True)]
@@ -62,7 +59,6 @@ class Agent(object):
         :return: Deepcopy of the agent.
         """
         new_agent = Agent(self.agent_id, self.name, -1, -1, self.creation_variables)
-        new_agent.tree_names = self.tree_names
 
         for i in range(8):
             new_agent.tree_list[i] = self.tree_list[i].__deepcopy__(memodict)
@@ -163,12 +159,14 @@ class Agent(object):
         return self.tree_list[7].eval(environment)
 
     def eval_all(self,
-                 environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> np.ndarray:
+                 environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]],
+                 arr: np.ndarray = None) -> np.ndarray:
         """
         Evaluates all trees and returns the result as numpy array.
 
         :param environment: Dict holding values for parameters.
-        :return: Array of size 8 * n
+        :param arr: (Optional) The original array holding the data.
+        :return:  of size 8 * n
         """
         n = 1
         # check type of first item, numpy 1D arrays are also accepted
@@ -179,7 +177,42 @@ class Agent(object):
 
         res = np.zeros(shape=(n, 8), dtype=float)
         for i in range(8):
-            res[:, i] = self.tree_list[i].eval(environment)
+            res[:, i] = self.tree_list[i].eval(environment, arr)
+
+        return res
+
+    def eval_all_parallel(self,
+                          environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]],
+                          arr: np.ndarray = None) -> np.ndarray:
+        """
+        Evaluates all trees and returns the result as numpy array.
+
+        :param environment: Dict holding values for parameters.
+        :param arr: (Optional) The original array holding the data.
+        :return:  of size 8 * n
+        """
+        n = 1
+        # check type of first item, numpy 1D arrays are also accepted
+        node_type = list(environment.keys())[0]
+        parameter = list(environment[node_type].keys())[0]
+        if type(environment[node_type][parameter]) == np.ndarray:
+            n = environment[node_type][parameter].shape[0]
+
+        res = np.zeros(shape=(n, 8), dtype=float)
+
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+        jobs = []
+        for i in range(8):
+            p = multiprocessing.Process(target=self.tree_list[i].eval_multiprocessing, args=(i, return_dict, environment, arr))
+            jobs.append(p)
+            p.start()
+
+        for proc in jobs:
+            proc.join()
+
+        for i in range(8):
+            res[:, i] = return_dict[i]
 
         return res
 
@@ -291,15 +324,19 @@ class Agent(object):
             s += f'{n_non_bloat_nodes[i]}\n'
         return s
 
-    def python_npy_jit(self) -> None:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> None:
         """
         Creates python compiled code to be executed instead of the eval
         function of the tree.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: None
         """
         for i in range(8):
-            self.tree_list[i].python_npy_jit()
+            self.tree_list[i].numba_jit(env_variables, headers)
 
     def prepare_for_rlbot(self):
         """

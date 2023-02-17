@@ -48,6 +48,50 @@ class SeasonManager(object):
         for league_id, league in self.leagues.items():
             league.finish_season()
 
+    def mutate_and_recombine(self) -> None:
+        """
+        In each league mutate and recombine the agents.
+
+        :return: None
+        """
+        for league_id, league in self.leagues.items():
+            league.mutate_and_recombine()
+
+    def interchange_leagues(self):
+        """
+        Swaps agents in the leagues. It will take the top 3 agents of the lower
+        league and swaps them with the lowest 3 agents of the upper league.
+
+        :return: None
+        """
+        league_ids = list(self.leagues.keys())
+
+        for i in range(1, len(league_ids)-1):
+            lower_league_ranking = self.leagues[i].ranking.copy()
+            upper_league_ranking = self.leagues[i+1].ranking.copy()
+
+            agent_id_1, _ = lower_league_ranking.pop()
+            agent_id_2, _ = lower_league_ranking.pop()
+            agent_id_3, _ = lower_league_ranking.pop()
+
+            agent_id_4, _ = upper_league_ranking.pop(0)
+            agent_id_5, _ = upper_league_ranking.pop(0)
+            agent_id_6, _ = upper_league_ranking.pop(0)
+
+            self.leagues[i].agent_ids.remove(agent_id_1)
+            self.leagues[i].agent_ids.remove(agent_id_2)
+            self.leagues[i].agent_ids.remove(agent_id_3)
+            self.leagues[i].add_agent(agent_id_4)
+            self.leagues[i].add_agent(agent_id_5)
+            self.leagues[i].add_agent(agent_id_6)
+
+            self.leagues[i+1].agent_ids.remove(agent_id_4)
+            self.leagues[i+1].agent_ids.remove(agent_id_5)
+            self.leagues[i+1].agent_ids.remove(agent_id_6)
+            self.leagues[i+1].add_agent(agent_id_1)
+            self.leagues[i+1].add_agent(agent_id_2)
+            self.leagues[i+1].add_agent(agent_id_3)
+
     def add_league(self, league: League) -> None:
         """
         Adds a league to the season manager.

@@ -25,8 +25,8 @@ class Tree(object):
         self.discrete_return: bool = discrete_return
         self.post_process_func: callable = scale_continuous
 
-        self.jit_npy: Union[callable, None] = None
-        self.is_jit_npy: bool = False
+        self.numba_jit_function: Union[callable, None] = None
+        self.is_numba_jitted: bool = False
 
         self.set_eval_post_process()
 
@@ -48,6 +48,8 @@ class Tree(object):
         new_tree.return_max = self.return_max
         new_tree.discrete_return = self.discrete_return
         new_tree.post_process_func = self.post_process_func
+        new_tree.is_numba_jitted = self.is_numba_jitted
+        new_tree.numba_jit_function = self.numba_jit_function
 
         return new_tree
 
@@ -82,25 +84,57 @@ class Tree(object):
             self.post_process_func = scale_continuous
 
     def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool]]]) -> Union[float, np.ndarray]:
+             environment: Dict[str, Dict[str, Union[float, bool]]],
+             arr: np.ndarray = None) -> Union[float, np.ndarray]:
         """
         Evaluates the tree.
 
         :param environment: Dictionary holding values for parameters.
+        :param arr: (Optional) The original array holding the data.
         :return: Float or array
         """
-        node_type = list(environment.keys())[0]
-        parameter = list(environment[node_type].keys())[0]
-
-        if self.is_jit_npy and type(environment[node_type][parameter]) == np.ndarray:
-            res = self.jit_npy(environment)
+        if self.is_numba_jitted and arr is not None:
+            res = self.numba_jit_function(arr)
         else:
             res = self.root.eval(environment)
 
         x_min = self.root.bloat_min
         x_max = self.root.bloat_max
+
+        if x_min == x_max:
+            return x_min
+
         post_res = self.post_process_func(res, x_min, x_max, self.return_min, self.return_max)
         return post_res
+
+    def eval_multiprocessing(self,
+                             idx: int,
+                             return_dict,
+                             environment: Dict[str, Dict[str, Union[float, bool]]],
+                             arr: np.ndarray = None) -> None:
+        """
+        Evaluates the tree.
+
+        :param idx: Index of the process.
+        :param return_dict: Dictionary to return values.
+        :param environment: Dictionary holding values for parameters.
+        :param arr: (Optional) The original array holding the data.
+        :return: Float or array
+        """
+        if self.is_numba_jitted and arr is not None:
+            res = self.numba_jit_function(arr)
+        else:
+            res = self.root.eval(environment)
+
+        x_min = self.root.bloat_min
+        x_max = self.root.bloat_max
+
+        if x_min == x_max:
+            x_min = 0.0
+            x_max = 1.0
+
+        post_res = self.post_process_func(res, x_min, x_max, self.return_min, self.return_max)
+        return_dict[idx] = post_res
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -118,7 +152,7 @@ class Tree(object):
 
         :return: None
         """
-        self.is_jit_npy = False
+        self.is_numba_jitted = False
         self.root.unmark_bloat()
 
     def mutate(self,
@@ -129,8 +163,6 @@ class Tree(object):
         :param p: Probability that a node will change.
         :return: None
         """
-        self.is_jit_npy = False
-
         work_list = []
         work_list.extend(self.root.children)
 
@@ -140,29 +172,36 @@ class Tree(object):
             if random_sample() < p:
                 # mutate the node
                 node.mutate(self.creation_variables)
+                self.is_numba_jitted = False
 
             work_list.extend(node.children)
 
-    def python_npy_jit(self) -> None:
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> None:
         """
         Creates python compiled code to be executed instead of the eval
         function of the tree.
 
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
         :return: None
         """
-        # generate source code
-        src_code = self.root.python_npy_jit()
-        src_code = f'def npy_jit_eval(env):\n  return {src_code}'
+        if self.is_numba_jitted:
+            return
 
+        # generate source code
+        src_code = self.root.numba_jit(env_variables, headers)
+        src_code = f'import numpy as np\nfrom numba import njit\n\n@njit\ndef npy_jit_eval(arr):\n\treturn {src_code}'
         # Converting above source code to an executable
-        glob, loc = {}, {}
+        local_variables = {}
         code = compile(src_code, '<string>', 'exec')
 
-        # Running the executable code, this loads npy_jit_eval into pythons runtime... i think...
-        exec(code, glob, loc)
+        # Running the executable code, this loads npy_jit_eval into pythons global runtime... i think...
+        exec(code, globals(), local_variables)
 
-        self.is_jit_npy = True
-        self.jit_npy = loc['npy_jit_eval']
+        self.is_numba_jitted = True
+        self.numba_jit_function = local_variables['npy_jit_eval']
 
     def get_all_nodes(self,
                       node_type: Type[Node]) -> List[Node]:
@@ -228,8 +267,8 @@ def recombine_trees(tree_1: 'Tree',
     :param tree_1: The first tree.
     :param tree_2: The second tree.
     """
-    tree_1.is_jit_npy = False
-    tree_2.is_jit_npy = False
+    tree_1.is_numba_jitted = False
+    tree_2.is_numba_jitted = False
 
     # choose uniformly which node type we will swap
     node_type = random.choice(all_branch_nodes)
