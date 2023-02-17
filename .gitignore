@@ -6,6 +6,7 @@ agent_storage/*
 
 recorded_data/*
 !recorded_data/data_util.py
+!recorded_data/rlgym_util.py
 !recorded_data/min_max.csv
 ae_data/
 
