@@ -33,6 +33,12 @@ class AE(nn.Module):
         activation = self.output_layer(code)
         reconstructed = torch.relu(activation)
         return reconstructed
+    
+    def save(self, path : str):
+        torch.save(self.state_dict(), path)
+    
+    def load(self, path : str):
+        self.load_state_dict(torch.load(path))
 
 def string_product(separator : str, *lists : List[str]):
     return [separator.join(x) for x in product(*lists)]
@@ -152,14 +158,14 @@ def learn_mnist():
         # display the epoch training loss
         print("epoch : {}/{}, loss = {:.6f}".format(epoch + 1, epochs, loss))
 
-def learn_rl(path : str = 'ae_data', epochs: int = 1000):
+def learn_rl(path : str = 'ae_data', epochs: int = 1000, hidden_size = 10, output_path = None):
 
     #  use gpu if available
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # create a model from `AE` autoencoder class
     # load it to the specified device, either gpu or cpu
-    model = AE(input_size= RocketLeagueDataset.INPUT_SIZE, hidden_size=1).to(device)
+    model = AE(input_size= RocketLeagueDataset.INPUT_SIZE, hidden_size=hidden_size).to(device)
 
     # create an optimizer object
     # Adam optimizer with learning rate 1e-3
@@ -203,3 +209,6 @@ def learn_rl(path : str = 'ae_data', epochs: int = 1000):
 
         # display the epoch training loss
         print("epoch : {}/{}, loss = {:.6f}".format(epoch + 1, epochs, loss))
+    
+    if (output_path is not None):
+        model.save(output_path)
