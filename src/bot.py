@@ -40,7 +40,7 @@ class MyBot(BaseAgent):
         # Keep our boost pad info updated with which pads are currently active
         self.boost_pad_tracker.update_boost_status(packet)
 
-        # determine which car id we have and which one the enemy has
+        # determine which car ID we have and which one the enemy has
         if self.enemy_index == -1:
             for i in range(64):
                 car = packet.game_cars[i]
