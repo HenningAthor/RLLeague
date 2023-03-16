@@ -20,8 +20,8 @@ from rlgym_tools.sb3_utils import SB3MultipleInstanceEnv
 from stable_baselines3.ppo import PPO
 
 from league.reward_functions import league_reward_functions
-from recorded_data.data_util import load_min_max_csv, state_to_feature_vector, scale_with_min_max, get_headers_for_feature_vector
-
+from recorded_data.data_util import load_min_max_csv, scale_with_min_max
+from recorded_data.rlgym_util import state_to_feature_vector, get_headers_for_feature_vector
 
 def reward_movement(idx: int, state: GameState):
     return np.linalg.norm(state.players[idx].inverted_car_data.linear_velocity)
