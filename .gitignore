@@ -10,3 +10,4 @@ recorded_data/*
 !recorded_data/min_max.csv
 ae_data/
 
+league_archive/
