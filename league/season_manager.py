@@ -1,5 +1,6 @@
 from league.league import League
 from league.match_scheduler import MatchScheduler
+from typing import Dict
 
 
 class SeasonManager(object):
@@ -17,7 +18,7 @@ class SeasonManager(object):
         :param rlgym_verbose: If rlgym should print (not everything can be disabled).
         """
         self.match_scheduler = MatchScheduler(n_instances=n_instances, wait_time=wait_time, minimize_windows=minimize_windows, verbose=verbose)
-        self.leagues = {}
+        self.leagues : Dict[int, League] = {}
 
     def simulate_one_season(self) -> None:
         """
