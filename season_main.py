@@ -66,7 +66,7 @@ if __name__ == '__main__':
                     agent.bloat_analysis(env_stats)
                     agent.prepare_for_rlbot()
                 league.add_agent(agent_id)
-        league.save_to_file()
+        leagues[-1].save_to_file()
 
     season_manager = SeasonManager(n_instances=4, wait_time=30, minimize_windows=False, verbose=True, rlgym_verbose=False)
     for league in leagues:
