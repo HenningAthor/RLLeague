@@ -143,26 +143,21 @@ class League(object):
             s += f'{agent_id}\t{reward}\n'
         print(s)
 
-    def mutate_and_recombine(self) -> None:
+    def mutate_and_recombine(self, keep_best_count = 3) -> None:
         """
         Mutates and recombines the agents. The top 3 agents will always be kept.
         The remaining agents will be replaced by new ones.
 
         :return: None
         """
+
         available_agents = self.agent_ids.copy()
 
-        agent_0_idx, _ = self.ranking[0]
-        agent_1_idx, _ = self.ranking[1]
-        agent_2_idx, _ = self.ranking[2]
-        available_agents.remove(agent_0_idx)
-        available_agents.remove(agent_1_idx)
-        available_agents.remove(agent_2_idx)
+        new_agent_ids = [self.ranking[i][0] for i in range(keep_best_count)]
+        for agent_idx in new_agent_ids:
+            available_agents.remove(agent_idx)
 
-        new_agent_ids = [agent_0_idx, agent_1_idx, agent_2_idx]
-        new_agents = [pickle.load(open(f"agent_storage/agent_{agent_0_idx}/agent_{agent_0_idx}.pickle", 'rb')),
-                      pickle.load(open(f"agent_storage/agent_{agent_1_idx}/agent_{agent_1_idx}.pickle", 'rb')),
-                      pickle.load(open(f"agent_storage/agent_{agent_2_idx}/agent_{agent_2_idx}.pickle", 'rb'))]
+        new_agents = [pickle.load(open(f"agent_storage/agent_{agent_idx}/agent_{agent_idx}.pickle", 'rb')) for agent_idx in new_agent_ids]
 
         rewards = [rew for _, rew in self.ranking]
         agents = [agent_id for agent_id, _ in self.ranking]
