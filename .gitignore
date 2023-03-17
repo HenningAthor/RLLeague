@@ -11,6 +11,7 @@ recorded_data/*
 ae_data/
 
 league_archive/
-league/
+league/league_storage/
+league/pending_matches/
 game_reports/
 temp_data/

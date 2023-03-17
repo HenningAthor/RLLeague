@@ -125,7 +125,7 @@ class League(object):
             reward_per_agent[agent_id] = sum(matches) / len(matches)
 
         temp = sorted(reward_per_agent.items(), key=lambda x: x[1])
-        self.ranking = list(reversed(temp))
+        self.ranking = list(temp)
         self.ranking_history.append(self.ranking)
         self.print_last_ranking()
 
