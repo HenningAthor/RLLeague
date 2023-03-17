@@ -11,3 +11,6 @@ recorded_data/*
 ae_data/
 
 league_archive/
+league/
+game_reports/
+temp_data/
