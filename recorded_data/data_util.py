@@ -120,6 +120,18 @@ def load_match(file_path: str,
     return data, column_names
 
 
+def match_len(file_path: str):
+    """
+    Load a match from a .parquet file and returns the number of data points.
+
+    :param file_path: Path to the .parquet file.
+    :return: Number of data points.
+    """
+    # read the parquet file
+    df = pd.read_parquet(file_path)
+    return len(df.index)
+
+
 def split_data(game_data: np.ndarray,
                headers: List[str]) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[str], List[str], List[str]]:
     """
@@ -199,8 +211,11 @@ def scale_with_min_max(features: np.ndarray,
         idx = min_max_header.index(name)  # get index in min-max data
         min_val, max_val = min_max[1][idx], min_max[0][idx]
 
-        # scale into [0, 1]
-        features[:, i] = (features[:, i] - min_val) / (max_val - min_val)
+        if np.isclose(min_val, max_val):
+            features[:, i] = 0.0
+        else:
+            # scale into [0, 1]
+            features[:, i] = (features[:, i] - min_val) / (max_val - min_val)
 
         # assert np.all((features[:, i] >= 0.0))
         # assert np.all((features[:, i] <= 1.0))
@@ -347,3 +362,19 @@ def pre_generate_modules(features: np.ndarray,
     headers.extend(['dist_ball_player1', 'dist_ball_player2', 'dist_player1_player2', 'ball_vel', 'player1_vel', 'player2_vel'])
 
     return features, headers
+
+
+def keep_certain_columns(features: np.ndarray,
+                         headers: List[str],
+                         headers_to_keep: List[str]) -> np.ndarray:
+    """
+    Only keeps specified columns of the data. Simultaneously sorts the columns.
+
+    :param features: The data.
+    :param headers: The current headers of all columns.
+    :param headers_to_keep: The headers, which should be kept.
+    :return: Data with reduced number of columns.
+    """
+    indices = [headers.index(head) for head in headers_to_keep]
+
+    return features[:, indices]

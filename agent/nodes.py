@@ -372,7 +372,17 @@ class SumNode(BinaryArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        return self.children[0].eval(environment) + self.children[1].eval(environment)
+        res = self.children[0].eval(environment) + self.children[1].eval(environment)
+
+        if False:
+            for x in res:
+                if not (self.bloat_min <= x <= self.bloat_max or np.isclose(x, self.bloat_min) or np.isclose(x, self.bloat_max)):
+                    print(self.bloat_min, x, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
+        return res
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -438,7 +448,17 @@ class ProductNode(BinaryArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        return self.children[0].eval(environment) * self.children[1].eval(environment)
+        res = self.children[0].eval(environment) * self.children[1].eval(environment)
+
+        if False:
+            for x in res:
+                if not (self.bloat_min <= x <= self.bloat_max or np.isclose(x, self.bloat_min) or np.isclose(x, self.bloat_max)):
+                    print(self.bloat_min, x, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
+        return res
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -593,7 +613,17 @@ class ArithmeticIdentityNode(UnaryArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        return self.children[0].eval(environment)
+        res = self.children[0].eval(environment)
+
+        if False:
+            for x in res:
+                if not (self.bloat_min <= x <= self.bloat_max or np.isclose(x, self.bloat_min) or np.isclose(x, self.bloat_max)):
+                    print(self.bloat_min, x, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
+        return res
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -656,7 +686,16 @@ class ArithmeticNegationNode(UnaryArithmeticNode):
         if self.is_bloat:
             return self.bloat_val
 
-        return -self.children[0].eval(environment)
+        res = -self.children[0].eval(environment)
+
+        if False:
+            if np.any(self.bloat_min > res) or np.any(res > self.bloat_max):
+                print(self.bloat_min, res, self.bloat_max)
+                for child in self.children:
+                    print(type(child))
+                assert False
+
+        return res
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -1087,6 +1126,153 @@ class UnaryLogicalNode(LogicalNode):
         :return: Python code as a string.
         """
         raise NotImplementedError
+
+
+class NegationNode(UnaryLogicalNode):
+    """
+    NegationNode object. Its one child should be LOGIC, and it evaluates
+    to a LOGIC value. It must have exactly one child.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
+
+    def eval(self,
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
+        """
+        Negates the value of its child.
+
+        :param environment: Dictionary holding values for parameters.
+        :return: Bool
+        """
+        if self.is_bloat:
+            return self.bloat_val
+
+        res = self.children[0].eval(environment)
+        if isinstance(res, np.ndarray):
+            return 1 - res
+        elif isinstance(res, bool):
+            return not res
+        return res
+
+    def determine_bloat(self,
+                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
+        """
+        Determines the bloat values for this node.
+        It will first determine the bloat values for its children and then the
+        bloat values for itself.
+
+        :param env_stats: Statistics for the parameters of the environment.
+        :return: None
+        """
+        for child in self.children:
+            child.determine_bloat(env_stats)
+
+        if self.children[0].is_bloat:
+            # the one child is bloat, therefore this node is also bloat
+            # only invert the bloat values
+            self.is_bloat = True
+            if isinstance(self.children[0].bloat_val, np.ndarray):
+                self.bloat_val = 1 - self.children[0].bloat_val
+                self.bloat_min = 1 - self.children[0].bloat_min
+                self.bloat_max = 1 - self.children[0].bloat_max
+            else:
+                self.bloat_val = not self.children[0].bloat_val
+                self.bloat_min = not self.children[0].bloat_min
+                self.bloat_max = not self.children[0].bloat_max
+        else:
+            self.bloat_min = False
+            self.bloat_max = True
+
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        return f'(~{src_1})'
+
+
+class IdentityLogicalNode(UnaryLogicalNode):
+    """
+    IdentityLogicalNode object. Its one child should be Logic, and it evaluates
+    to a LOGIC value. It must have exactly one child.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def assert_self(self):
+        """
+        Asserts all variables, which are specific to the node.
+
+        :return: None
+        """
+        assert isinstance(self.children[0], LogicalNode)
+
+    def eval(self,
+             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
+        """
+        Returns the value of its child.
+
+        :param environment: Dictionary holding values for parameters.
+        :return: Bool
+        """
+        if self.is_bloat:
+            return self.bloat_val
+
+        res = self.children[0].eval(environment)
+        return res
+
+    def determine_bloat(self,
+                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
+        """
+        Determines the bloat values for this node.
+        It will first determine the bloat values for its children and then the
+        bloat values for itself.
+
+        :param env_stats: Statistics for the parameters of the environment.
+        :return: None
+        """
+        for child in self.children:
+            child.determine_bloat(env_stats)
+
+        if self.children[0].is_bloat:
+            # the one child is bloat, therefore this node is also bloat
+            # just pass the bloat values
+            self.is_bloat = True
+            self.bloat_val = self.children[0].bloat_val
+            self.bloat_min = self.children[0].bloat_min
+            self.bloat_max = self.children[0].bloat_max
+        else:
+            self.bloat_min = False
+            self.bloat_max = True
+
+    def numba_jit(self,
+                  env_variables: Dict[str, List[str]],
+                  headers: List[str]) -> str:
+        """
+        Writes python code in a string, so it can be compiled.
+
+        :param env_variables: Variables in the environment.
+        :param headers: Name of the columns.
+        :return: Python code as a string.
+        """
+        src_1 = self.children[0].numba_jit(env_variables, headers)
+        return f'({src_1})'
 
 
 class ComparisonNode(LogicalNode):
@@ -1593,153 +1779,6 @@ class GreaterNode(ComparisonNode):
         return f'({src_1} > {src_2})'
 
 
-class NegationNode(UnaryLogicalNode):
-    """
-    NegationNode object. Its one child should be LOGIC, and it evaluates
-    to a LOGIC value. It must have exactly one child.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    def assert_self(self):
-        """
-        Asserts all variables, which are specific to the node.
-
-        :return: None
-        """
-        assert isinstance(self.children[0], LogicalNode)
-
-    def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
-        """
-        Negates the value of its child.
-
-        :param environment: Dictionary holding values for parameters.
-        :return: Bool
-        """
-        if self.is_bloat:
-            return self.bloat_val
-
-        res = self.children[0].eval(environment)
-        if isinstance(res, np.ndarray):
-            return ~res
-        elif isinstance(res, bool):
-            return not res
-        return res
-
-    def determine_bloat(self,
-                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
-        """
-        Determines the bloat values for this node.
-        It will first determine the bloat values for its children and then the
-        bloat values for itself.
-
-        :param env_stats: Statistics for the parameters of the environment.
-        :return: None
-        """
-        for child in self.children:
-            child.determine_bloat(env_stats)
-
-        if self.children[0].is_bloat:
-            # the one child is bloat, therefore this node is also bloat
-            # only invert the bloat values
-            self.is_bloat = True
-            if isinstance(self.children[0].bloat_val, np.ndarray):
-                self.bloat_val = ~self.children[0].bloat_val
-                self.bloat_min = ~self.children[0].bloat_min
-                self.bloat_max = ~self.children[0].bloat_max
-            else:
-                self.bloat_val = not self.children[0].bloat_val
-                self.bloat_min = not self.children[0].bloat_min
-                self.bloat_max = not self.children[0].bloat_max
-        else:
-            self.bloat_min = False
-            self.bloat_max = True
-
-    def numba_jit(self,
-                  env_variables: Dict[str, List[str]],
-                  headers: List[str]) -> str:
-        """
-        Writes python code in a string, so it can be compiled.
-
-        :param env_variables: Variables in the environment.
-        :param headers: Name of the columns.
-        :return: Python code as a string.
-        """
-        src_1 = self.children[0].numba_jit(env_variables, headers)
-        return f'(~{src_1})'
-
-
-class IdentityLogicalNode(UnaryLogicalNode):
-    """
-    IdentityLogicalNode object. Its one child should be Logic, and it evaluates
-    to a LOGIC value. It must have exactly one child.
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    def assert_self(self):
-        """
-        Asserts all variables, which are specific to the node.
-
-        :return: None
-        """
-        assert isinstance(self.children[0], LogicalNode)
-
-    def eval(self,
-             environment: Dict[str, Dict[str, Union[float, bool, np.ndarray]]]) -> Union[bool, np.ndarray]:
-        """
-        Returns the value of its child.
-
-        :param environment: Dictionary holding values for parameters.
-        :return: Bool
-        """
-        if self.is_bloat:
-            return self.bloat_val
-
-        res = self.children[0].eval(environment)
-        return res
-
-    def determine_bloat(self,
-                        env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
-        """
-        Determines the bloat values for this node.
-        It will first determine the bloat values for its children and then the
-        bloat values for itself.
-
-        :param env_stats: Statistics for the parameters of the environment.
-        :return: None
-        """
-        for child in self.children:
-            child.determine_bloat(env_stats)
-
-        if self.children[0].is_bloat:
-            # the one child is bloat, therefore this node is also bloat
-            # just pass the bloat values
-            self.is_bloat = True
-            self.bloat_val = self.children[0].bloat_val
-            self.bloat_min = self.children[0].bloat_min
-            self.bloat_max = self.children[0].bloat_max
-        else:
-            self.bloat_min = False
-            self.bloat_max = True
-
-    def numba_jit(self,
-                  env_variables: Dict[str, List[str]],
-                  headers: List[str]) -> str:
-        """
-        Writes python code in a string, so it can be compiled.
-
-        :param env_variables: Variables in the environment.
-        :param headers: Name of the columns.
-        :return: Python code as a string.
-        """
-        src_1 = self.children[0].numba_jit(env_variables, headers)
-        return f'({src_1})'
-
-
 class DecisionNode(ArithmeticNode):
     """
     DecisionNode object. It must have exactly three children. The first child
@@ -1776,6 +1815,24 @@ class DecisionNode(ArithmeticNode):
         res2 = self.children[2].eval(environment)
 
         res = (decision * res1) + ((1 - decision) * res2)
+
+        if False:
+            if isinstance(res, float):
+                if not (self.bloat_min <= res <= self.bloat_max or np.isclose(res, self.bloat_min) or np.isclose(res, self.bloat_max)):
+                    print(self.bloat_min, res, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
+                return res
+
+            for x in res:
+                if not (self.bloat_min <= x <= self.bloat_max or np.isclose(x, self.bloat_min) or np.isclose(x, self.bloat_max)):
+                    print(self.bloat_min, x, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
         return res
 
     def construct_tree(self,
@@ -1883,6 +1940,13 @@ class ArithmeticConstantNode(ArithmeticNode):
         :return: Float
         """
         res = self.constant
+
+        if np.any(self.bloat_min > res) or np.any(res > self.bloat_max):
+            print(self.bloat_min, res, self.bloat_max)
+            for child in self.children:
+                print(type(child))
+            assert False
+
         return res
 
     def construct_tree(self,
@@ -2051,6 +2115,15 @@ class ArithmeticParameterNode(ArithmeticNode):
         :return: Float
         """
         res = environment['ARITHMETIC'][self.parameter]
+
+        if False:
+            for x in res:
+                if not (self.bloat_min <= x <= self.bloat_max or np.isclose(x, self.bloat_min) or np.isclose(x, self.bloat_max)):
+                    print(self.bloat_min, x, self.bloat_max)
+                    for child in self.children:
+                        print(type(child), child.bloat_min, child.bloat_max)
+                    assert False
+
         return res
 
     def construct_tree(self,
@@ -2133,6 +2206,9 @@ class LogicParameterNode(LogicalNode):
         :param environment: Dictionary holding values for parameters.
         :return: Bool.
         """
+        if self.parameter == '':
+            return self.constant
+
         res = environment['LOGIC'][self.parameter]
         return res
 
@@ -2150,7 +2226,11 @@ class LogicParameterNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = random.choice(env_vars['LOGIC'])
+        if 'LOGIC' not in env_vars or env_vars['LOGIC'] == []:
+            self.parameter = ''
+            self.constant = True if random_sample() < 0.5 else False
+        else:
+            self.parameter = random.choice(env_vars['LOGIC'])
 
     def determine_bloat(self,
                         env_stats: Dict[str, Dict[str, Dict[str, Union[float, bool]]]]) -> None:
@@ -2162,8 +2242,12 @@ class LogicParameterNode(LogicalNode):
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
         """
-        self.bloat_min = env_stats['LOGIC'][self.parameter]['min']
-        self.bloat_max = env_stats['LOGIC'][self.parameter]['max']
+        if self.parameter == '':
+            self.bloat_min = self.constant
+            self.bloat_max = self.constant
+        else:
+            self.bloat_min = env_stats['LOGIC'][self.parameter]['min']
+            self.bloat_max = env_stats['LOGIC'][self.parameter]['max']
 
     def mutate(self,
                env_vars: Dict[str, List[str]]) -> None:
@@ -2173,7 +2257,10 @@ class LogicParameterNode(LogicalNode):
         :param env_vars: Variables of the environment.
         :return: None
         """
-        self.parameter = random.choice(env_vars['LOGIC'])
+        if self.parameter == '':
+            self.constant = True if random_sample() < 0.5 else False
+        else:
+            self.parameter = random.choice(env_vars['LOGIC'])
 
     def numba_jit(self,
                   env_variables: Dict[str, List[str]],

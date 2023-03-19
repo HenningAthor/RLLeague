@@ -158,8 +158,8 @@ class RLLeagueAction(ContinuousAction):
         r1 = self.step_reward_func(0, state)
         r2 = self.step_reward_func(1, state)
 
-        self.rew_1 += r1
-        self.rew_2 += r2
+        self.rew_1 += 1.0  # r1
+        self.rew_2 += 1.0  # r2
 
         # player 1 has index 0, player 2 has index 1
         env_1 = {'ARITHMETIC': {'ball/pos_x': features[0, self.feature_header.index('ball/pos_x')],
