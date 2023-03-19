@@ -607,10 +607,11 @@ class ArithmeticIdentityNode(UnaryArithmeticNode):
         """
         self.children[0].determine_bloat(env_stats)
 
+        self.bloat_min = self.children[0].bloat_min
+        self.bloat_max = self.children[0].bloat_max
+
         if self.children[0].is_bloat:
             self.is_bloat = True
-            self.bloat_min = self.children[0].bloat_min
-            self.bloat_max = self.children[0].bloat_max
             self.bloat_val = self.children[0].bloat_val
 
     def numba_jit(self,
@@ -669,10 +670,11 @@ class ArithmeticNegationNode(UnaryArithmeticNode):
         """
         self.children[0].determine_bloat(env_stats)
 
+        self.bloat_max = -self.children[0].bloat_min
+        self.bloat_min = -self.children[0].bloat_max
+
         if self.children[0].is_bloat:
             self.is_bloat = True
-            self.bloat_min = -self.children[0].bloat_min
-            self.bloat_max = -self.children[0].bloat_max
             self.bloat_val = -self.children[0].bloat_val
 
     def numba_jit(self,
@@ -1909,6 +1911,8 @@ class ArithmeticConstantNode(ArithmeticNode):
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
         """
+        self.is_bloat = True
+        self.bloat_val = self.constant
         self.bloat_min = self.constant
         self.bloat_max = self.constant
 
@@ -1991,6 +1995,8 @@ class LogicalConstantNode(LogicalNode):
         :param env_stats: Statistics for the parameters of the environment.
         :return: None
         """
+        self.is_bloat = True
+        self.bloat_val = self.constant
         self.bloat_min = self.constant
         self.bloat_max = self.constant
 
