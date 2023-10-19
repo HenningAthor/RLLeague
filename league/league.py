@@ -153,7 +153,7 @@ class League(object):
 
         available_agents = self.agent_ids.copy()
 
-        new_agent_ids = [self.ranking[i][0] for i in range(keep_best_count)]
+        new_agent_ids = [self.ranking[-1-i][0] for i in range(keep_best_count)]
         for agent_idx in new_agent_ids:
             available_agents.remove(agent_idx)
 
@@ -216,13 +216,13 @@ def league_exists(league_id: int) -> bool:
     return os.path.exists(full_path)
 
 
-def load_league_from_file(league_id: int) -> 'League':
+def load_league_from_file(league_id: int, root_path = '') -> 'League':
     """
     Loads the league from a file.
 
     :return: The league.
     """
-    path = 'league/league_storage/'
+    path = root_path + 'league/league_storage/'
     if not os.path.exists(path):
         os.mkdir(path)
 

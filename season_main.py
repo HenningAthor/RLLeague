@@ -6,6 +6,7 @@ from league.reward_functions import league_reward_functions
 from league.season_manager import SeasonManager
 from recorded_data.data_util import load_min_max_csv, generate_env_stats
 from typing import List
+from pathlib import Path
 
 if __name__ == '__main__':
     env_variables = {'ARITHMETIC': ['ball/pos_x',
@@ -49,6 +50,10 @@ if __name__ == '__main__':
     min_max_data, min_max_headers = load_min_max_csv()
     env_stats = generate_env_stats(env_variables, min_max_data, min_max_headers)
 
+    Path('league/league_storage').mkdir(exist_ok=True, parents=True)
+    Path('league/pending_matches').mkdir(exist_ok=True, parents=True)
+    Path('game_reports').mkdir(exist_ok=True, parents=True)
+
     LEAGUE_COUNT = 2
     leagues : List[League] = []
 
@@ -68,7 +73,7 @@ if __name__ == '__main__':
                 league.add_agent(agent_id)
         leagues[-1].save_to_file()
 
-    season_manager = SeasonManager(n_instances=4, wait_time=30, minimize_windows=False, verbose=True, rlgym_verbose=False)
+    season_manager = SeasonManager(n_instances=6, wait_time=30, minimize_windows=False, verbose=True, rlgym_verbose=False)
     for league in leagues:
         season_manager.add_league(league)
 
