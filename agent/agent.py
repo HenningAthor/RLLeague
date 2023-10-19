@@ -9,7 +9,7 @@ from typing import Dict, Union, Tuple, List
 import numpy as np
 
 from agent.tree import Tree, recombine_trees
-from agent.util import scale_discrete
+from agent.util import scale_discrete, random_sample
 
 
 class Agent(object):
@@ -675,7 +675,7 @@ def recombine_agents(agent_1: Agent,
     agent_2 = agent_2.__deepcopy__()
 
     for tree_1, tree_2 in zip(agent_1.tree_list, agent_2.tree_list):
-        if np.random.sample() < p:
+        if random_sample() < p:
             recombine_trees(tree_1, tree_2)
 
     return agent_1, agent_2

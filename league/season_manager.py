@@ -1,5 +1,9 @@
+import pickle
+
+from agent.agent import Agent
 from league.league import League
 from league.match_scheduler import MatchScheduler
+from recorded_data.data_util import generate_env_stats, load_min_max_csv
 from typing import Dict
 
 
@@ -70,6 +74,28 @@ class SeasonManager(object):
         for i in range(1, len(league_ids)-1):
             lower_league_ranking = self.leagues[i].ranking.copy()
             upper_league_ranking = self.leagues[i+1].ranking.copy()
+
+            if i == 1:
+                agent_id_4, _ = lower_league_ranking.pop(0)
+                agent_id_5, _ = lower_league_ranking.pop(0)
+                agent_id_6, _ = lower_league_ranking.pop(0)
+
+                agent = pickle.load(open(f"agent_storage/agent_{agent_id_4}/agent_{agent_id_4}.pickle", 'rb'))
+                env_variables = agent.creation_variables
+                min_max_data, min_max_headers = load_min_max_csv()
+                env_stats = generate_env_stats(env_variables, min_max_data, min_max_headers)
+
+                agent = Agent(agent_id_4, f'agent_{agent_id_4}', 5, 10, env_variables)
+                agent.bloat_analysis(env_stats)
+                agent.prepare_for_rlbot()
+
+                agent = Agent(agent_id_5, f'agent_{agent_id_5}', 5, 10, env_variables)
+                agent.bloat_analysis(env_stats)
+                agent.prepare_for_rlbot()
+
+                agent = Agent(agent_id_6, f'agent_{agent_id_6}', 5, 10, env_variables)
+                agent.bloat_analysis(env_stats)
+                agent.prepare_for_rlbot()
 
             agent_id_1, _ = lower_league_ranking.pop()
             agent_id_2, _ = lower_league_ranking.pop()
